@@ -56,8 +56,12 @@ The overnight TRM, unchanged, run with T ∈ {1,2,3,4,6} × n ∈ {1,2,3,6,9} fo
 
 ## Next steps
 
+**Superseded by [EXPERIMENT.md](EXPERIMENT.md)** (2026-11-20): the full design for the experiment that tests the hypothesis, with fixed success criteria. The items below are kept as history.
+
+**Small-step run result (2026-11-20):** T=1, n=2, no halting, 68.7k steps, best 83.2% optimal-move accuracy (`results/c4-smallstep/`). Extra supervision steps add about 1 point, almost all at step 2, and no more for deep positions, even within one game stage. The pilots also showed the dataset's depth label mostly measures game stage (depth vs. ply correlation −0.63), and 15% of test positions have every legal move optimal.
+
 1. ~~Test-time recursion sweep~~: done, see above.
-2. **Small-step long run (next):** train TRM with small steps and halting off, e.g. `uv run c4-train --model trm --T 1 --n 2 --no-halt --d-model 256 --batch-size 128`. Then each supervision step is a small unit of thinking, and accuracy by step for each depth directly tests "the step where accuracy jumps grows with d".
+2. ~~Small-step long run~~ (done, see above): train TRM with small steps and halting off, e.g. `uv run c4-train --model trm --T 1 --n 2 --no-halt --d-model 256 --batch-size 128`. Then each supervision step is a small unit of thinking, and accuracy by step for each depth directly tests "the step where accuracy jumps grows with d".
 3. **Harder dataset if needed:** generate positions from near-optimal play (solver-guided moves with noise) instead of safe-random play, so shallow pattern-matching fails more often. This is a change to `connect4.py` sampling.
 4. **Compute-matched baseline:** a `direct` model with about as many layers as TRM uses per step (e.g. `--n-layers 42`), so the comparison is matched on compute and not only on training steps.
 5. Later: MCTS at matched FLOPs (Tier 1), and the Pgx game suite.
