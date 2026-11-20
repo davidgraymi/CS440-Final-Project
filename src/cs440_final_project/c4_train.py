@@ -415,6 +415,8 @@ def sweep_main(argv=None):
                        sec=round(time.time() - t0, 1))
             rows.append(row)
             print(json.dumps(row), flush=True)
+            if device.type == "mps":  # don't let cached blocks pile up across settings
+                torch.mps.empty_cache()
     model.cfg.T, model.cfg.n = trained
     result = dict(ckpt=args.ckpt, trained_T=trained[0], trained_n=trained[1], n_layers=model.cfg.n_layers, n_positions=len(buckets), rows=rows)
     (out_dir / "sweep.json").write_text(json.dumps(result, indent=2))

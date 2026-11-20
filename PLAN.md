@@ -2,7 +2,7 @@
 
 Handoff notes for picking this project up in a new session. Background, hypothesis and benchmark design are in `README.md`; this file covers what has been done, what we found, and what comes next.
 
-Branch: `trm-sanity-check` (all work so far). Last updated 2026-11-20.
+Branch: `trm-sanity-check` (all work so far). Last updated 2026-11-20 (after the sweep).
 
 ## Status at a glance
 
@@ -13,8 +13,8 @@ Branch: `trm-sanity-check` (all work so far). Last updated 2026-11-20.
 | Connect Four dataset: 1M positions with exact solver labels | Done (committed) | `data/c4_{train,test}.npz`, `connect4.py` |
 | Connect Four training and evaluation | Done | `c4_train.py` (`c4-train`, `c4-eval`, `c4-sweep`) |
 | Overnight pilot: TRM vs. ds-only vs. direct | Done | `results/c4-overnight/` (committed from the server) |
-| Test-time recursion sweep on the overnight TRM | Implemented, **not yet run** | `uv run c4-sweep` |
-| Long training run | Not started; design depends on the sweep | see Next steps |
+| Test-time recursion sweep on the overnight TRM | Done (2026-11-20): flat beyond the trained setting | `results/c4-sweep/` |
+| Small-step long run (step 2) | **Next**; not started | see Next steps |
 
 ## Results so far
 
@@ -40,17 +40,24 @@ Findings:
 
 Full numbers: `results/c4-overnight/c4eval-c4-*-overnight/summary.json` and the plots next to them.
 
+### Test-time recursion sweep (2026-11-20)
+
+The overnight TRM, unchanged, run with T ∈ {1,2,3,4,6} × n ∈ {1,2,3,6,9} for one supervision step each, on 5,000 depth-balanced test positions (500 per bucket), on MPS. It took 7 minutes.
+
+| Depth bucket | T=1, n=1 (4 layer applications) | Trained T=3, n=6 (42) | T=6, n=9 (120) |
+|---|---|---|---|
+| 3–4 | 60.0% | 98.0% | 97.4% |
+| 9–12 | 50.4% | 84.6% | 86.2% |
+| 17–24 | 54.4% | 81.0% | 79.0% |
+| 25–42 | 56.0% | 80.6% | 79.6% |
+| All | 62.6% | 89.6% | 89.3% |
+
+**Outcome: the model only learned its trained compute budget.** Below the trained setting, accuracy falls at every depth. Above it, every depth stays flat: 3× more recursion changes results by ±1.5 points, about the noise level at 500 per bucket. Deep positions gain no more than shallow ones. The trained setting reproduces the overnight evaluation (89.6% vs. 89.7%). So test-time recursion gives no evidence for the depth hypothesis with this model, and step 2 is next. Files: `results/c4-sweep/` (`sweep.json`, `acc_vs_compute_by_depth.png`; the run and guard logs sit next to them on the server but `*.log` is gitignored).
+
 ## Next steps
 
-1. **Run the test-time recursion sweep** on the overnight TRM checkpoint (no retraining):
-   ```bash
-   uv run c4-sweep --ckpt results/c4-overnight/c4-trm-overnight/ckpt.pt
-   ```
-   This tries T ∈ {1,2,3,4,6} × n ∈ {1,2,3,6,9} for one step each, on 5,000 depth-balanced positions, and plots accuracy against compute for each depth.
-   - If deep buckets (d ≥ 9) gain from more recursion and shallow ones don't, the model uses recursion as lookahead, which supports the hypothesis. Then do step 2.
-   - If all curves are flat, the positions can be solved by pattern-matching. Then do step 3 first.
-   - If accuracy falls away from the trained setting (T=3, n=6), the model only learned that one setting. Step 2 addresses this as well.
-2. **Small-step long run:** train TRM with small steps and halting off, e.g. `uv run c4-train --model trm --T 1 --n 2 --no-halt --d-model 256 --batch-size 128`. Then each supervision step is a small unit of thinking, and accuracy by step for each depth directly tests "the step where accuracy jumps grows with d".
+1. ~~Test-time recursion sweep~~: done, see above.
+2. **Small-step long run (next):** train TRM with small steps and halting off, e.g. `uv run c4-train --model trm --T 1 --n 2 --no-halt --d-model 256 --batch-size 128`. Then each supervision step is a small unit of thinking, and accuracy by step for each depth directly tests "the step where accuracy jumps grows with d".
 3. **Harder dataset if needed:** generate positions from near-optimal play (solver-guided moves with noise) instead of safe-random play, so shallow pattern-matching fails more often. This is a change to `connect4.py` sampling.
 4. **Compute-matched baseline:** a `direct` model with about as many layers as TRM uses per step (e.g. `--n-layers 42`), so the comparison is matched on compute and not only on training steps.
 5. Later: MCTS at matched FLOPs (Tier 1), and the Pgx game suite.
@@ -70,6 +77,12 @@ git pull && DNS_STOP=1 nohup scripts/run_c4_experiment.sh > runs/c4-experiment.l
 
 Speed on the M1 with d_model 256 and batch 128: about 1.0 s per TRM step, and free memory about 33% while training (61% idle).
 
+Training and evaluation run on the GPU (`--device mps`). On Apple silicon the GPU shares the same 16 GB of RAM as AdGuard and everything else, which is why the MPS memory cap matters. The GPU still keeps the CPU cores free for AdGuard.
+
+**Evaluation-only jobs** (sweeps): use `scripts/run_c4_sweep.sh`. It runs at nice 19 with background QoS, 2 threads and an MPS cap of about 1.6 GB. Its guard checks every 10 s and stops the job (SIGTERM, then SIGKILL) if DNS fails 2 checks in a row, is slower than 200 ms 3 checks in a row, the AdGuardHome process is gone, or free memory drops below 40%. It refuses to start unless DNS is healthy and at least 55% of memory is free. The sweep used about 390 MB; free memory stayed at 74% or more and DNS at 29 ms or less.
+
+**Docker Desktop** was limited to 2.5 GB on 2026-11-20 (it was 8 GB, and the VM had grown to fill it, pushing 3 GB into swap). The containers use about 1.3 GB including VM overhead. Backup of the old settings: `~/Library/Group Containers/group.com.docker/settings-store.json.bak-20261120-084237`.
+
 ## Gotchas learned the hard way
 
 - **MPS vs. CPU:** the deep recursion amplifies small floating-point differences. MPS changes about 6% of individual answers, but net accuracy is within noise. Use MPS for development and CPU or CUDA for final numbers.
@@ -77,4 +90,6 @@ Speed on the M1 with d_model 256 and batch 128: about 1.0 s per TRM step, and fr
 - **Building the dataset on the Mac mini starved AdGuard** (DNS timeouts). Build data elsewhere and commit it; the 1M-position dataset is in git.
 - **Local network DNS** (192.168.0.253) blocks Hugging Face's CDN (`us.aws.cdn.hf.co`). The Sudoku checkpoint and data were downloaded with `curl --resolve` using a public DNS lookup.
 - **Licensing:** Pascal Pons' solver is AGPL-3.0. It stays in `third_party/` (gitignored) and is run as a separate process. The Sudoku checkpoint (`MaximeILL/GAR_ckpts`) states no license, so it isn't committed; download instructions are in the README.
+- **MPS evaluation at batch 512 hit the 1.6 GB cap** on the second sweep setting: PyTorch's MPS allocator holds on to freed memory across settings. Use batch 128, and `c4-sweep` now empties the MPS cache after each setting. The cap failed safely (PyTorch raised an error; system memory was never touched).
+- **Stale console scripts:** `c4-sweep` was added after the last `uv sync`, so `uv run c4-sweep` fails on the server. `run_c4_sweep.sh` calls `sweep_main` through `.venv/bin/python` instead of re-syncing.
 - The official TRM code was run once (with the user's permission) to verify our implementation. It isn't vendored.
