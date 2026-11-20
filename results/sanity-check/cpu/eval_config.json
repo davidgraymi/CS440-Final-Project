@@ -1,0 +1,12 @@
+{
+  "official": "data/ckpt/TRM-MLP-Sudoku-Extreme.pt",
+  "ckpt": null,
+  "analyze": null,
+  "task": "sudoku",
+  "num": 2000,
+  "seed": 0,
+  "batch_size": 250,
+  "device": "cpu",
+  "threads": 0,
+  "out": null
+}

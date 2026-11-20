@@ -7,11 +7,23 @@ authors = [
     { name = "David Gray", email = "davidgraymi@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "huggingface-hub>=2.4.0",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.5",
+    "torch>=2.15.0",
+]
 
 [project.scripts]
 cs440-final-project = "cs440_final_project:main"
+trm-train = "cs440_final_project.train:main"
+trm-eval = "cs440_final_project.evaluate:main"
 
 [build-system]
 requires = ["uv_build>=0.13.9,<0.14.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
