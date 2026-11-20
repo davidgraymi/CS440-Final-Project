@@ -358,3 +358,98 @@ def eval_main(argv=None):
 
 if __name__ == "__main__":
     train_main()
+
+
+# ------------------------------------------------------------------- c4-sweep
+
+
+def sweep_main(argv=None):
+    """Test-time thinking sweep: vary TRM's recursions per step (T) and latent
+    updates per recursion (n) on a trained checkpoint, without retraining.
+
+        uv run c4-sweep --ckpt runs/c4-trm-overnight/ckpt.pt
+
+    Each setting runs `--steps` supervision steps (default 1) and reports
+    optimal-move accuracy per depth bucket against compute, measured as layer
+    applications per step: T * (n + 1) * n_layers. If deeper positions gain
+    more from extra recursion, the model is using its recursion as lookahead.
+    """
+    p = argparse.ArgumentParser(description=sweep_main.__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--ckpt", required=True)
+    p.add_argument("--data-prefix", default=str(ROOT / "data" / "c4"))
+    p.add_argument("--per-bucket", type=int, default=500)
+    p.add_argument("--T", default="1,2,3,4,6", help="comma-separated recursions per step")
+    p.add_argument("--n", default="1,2,3,6,9", help="comma-separated latent updates per recursion")
+    p.add_argument("--steps", type=int, default=1, help="supervision steps per setting")
+    p.add_argument("--batch-size", type=int, default=512)
+    p.add_argument("--device", default="auto")
+    p.add_argument("--out", default=None)
+    args = p.parse_args(argv)
+
+    device = pick_device(args.device)
+    ck = torch.load(args.ckpt, map_location="cpu")
+    if ck["kind"] != "trm":
+        raise SystemExit("c4-sweep needs a TRM checkpoint")
+    model = build_model("trm", ModelConfig(**ck["cfg"]))
+    model.load_state_dict(ck["ema"])
+    model.to(device)
+    trained = (model.cfg.T, model.cfg.n)
+    test = balanced_subset(load(f"{args.data_prefix}_test.npz"), args.per_bucket)
+    buckets = bucket_of(test["depth"], test["value"])
+    out_dir = Path(args.out) if args.out else RUNS_DIR / f"c4sweep-{Path(args.ckpt).parent.name}-{device.type}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    for T in [int(v) for v in args.T.split(",")]:
+        for n in [int(v) for v in args.n.split(",")]:
+            model.cfg.T, model.cfg.n = T, n
+            t0 = time.time()
+            move_ok, value_ok, _ = run_eval(model, test, device, args.batch_size, args.steps)
+            row = dict(T=T, n=n, layers_per_step=model.effective_depth(), steps=args.steps,
+                       move_acc=round(float(move_ok[:, -1].mean()), 4),
+                       value_acc=round(float(value_ok[:, -1].mean()), 4),
+                       by_depth={name: round(float(move_ok[buckets == k, -1].mean()), 4)
+                                 for k, name in enumerate(BUCKET_NAMES) if (buckets == k).any()},
+                       sec=round(time.time() - t0, 1))
+            rows.append(row)
+            print(json.dumps(row), flush=True)
+    model.cfg.T, model.cfg.n = trained
+    result = dict(ckpt=args.ckpt, trained_T=trained[0], trained_n=trained[1], n_layers=model.cfg.n_layers, n_positions=len(buckets), rows=rows)
+    (out_dir / "sweep.json").write_text(json.dumps(result, indent=2))
+    _plot_sweep(result, out_dir / "acc_vs_compute_by_depth.png")
+    print(f"wrote {out_dir}/sweep.json and acc_vs_compute_by_depth.png")
+
+
+def _plot_sweep(result, out):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    rows = sorted(result["rows"], key=lambda r: r["layers_per_step"])
+    # One point per compute level: the best (T, n) at that compute.
+    by_compute = {}
+    for r in rows:
+        c = r["layers_per_step"]
+        if c not in by_compute or r["move_acc"] > by_compute[c]["move_acc"]:
+            by_compute[c] = r
+    xs = sorted(by_compute)
+    names = list(rows[0]["by_depth"])
+    fig, ax = plt.subplots(figsize=(7.5, 4.8))
+    colors = plt.cm.viridis(np.linspace(0.0, 0.9, len(names)))
+    for name, c in zip(names, colors):
+        ax.plot(xs, [by_compute[x]["by_depth"][name] for x in xs], "--" if name == "draw" else "-",
+                marker="o", ms=3, color=c, label=f"d={name}")
+    trained = result["trained_T"] * (result["trained_n"] + 1) * result["n_layers"]
+    ax.axvline(trained, color="gray", lw=0.8, ls=":")
+    ax.text(trained, 0.02, " trained", color="gray", fontsize=8)
+    ax.set_xscale("log")
+    ax.set_xlabel("layer applications per step (T x (n+1) x layers), log scale")
+    ax.set_ylabel("optimal-move accuracy")
+    ax.set_title("Test-time thinking: accuracy vs. recursion compute, by depth")
+    ax.set_ylim(0, 1)
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=7, ncol=2, loc="lower right")
+    fig.tight_layout()
+    fig.savefig(out, dpi=150)
+    plt.close(fig)

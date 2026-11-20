@@ -21,6 +21,7 @@ trm-eval = "cs440_final_project.evaluate:main"
 c4-data = "cs440_final_project.connect4:main"
 c4-train = "cs440_final_project.c4_train:train_main"
 c4-eval = "cs440_final_project.c4_train:eval_main"
+c4-sweep = "cs440_final_project.c4_train:sweep_main"
 
 [build-system]
 requires = ["uv_build>=0.13.9,<0.14.0"]
