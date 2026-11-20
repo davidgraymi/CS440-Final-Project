@@ -112,6 +112,49 @@ def depth_from_score(score: int, n: int) -> int:
     return 42 - n
 
 
+def required_depth(scores: np.ndarray, n: int) -> int:
+    """r: the search depth (plies) needed to find an optimal move in a won position.
+
+    A depth-k search with no evaluation function finds an optimal move once it
+    either proves the fastest win (k >= d) or refutes every non-optimal move,
+    i.e. sees each one lose (k >= its loss distance). So
+        r = min(d, max loss distance over non-optimal moves)
+    if every non-optimal move loses, and r = d if any of them draws or wins more
+    slowly (those can't be refuted). r = 0 if every legal move is optimal.
+    Returns -1 for positions that are not won. `scores`: per-column solver scores
+    for the side to move (INVALID for full columns); n: plies played."""
+    s = np.asarray(scores)
+    valid = s != INVALID
+    best = int(s[valid].max())
+    if best <= 0:
+        return -1
+    d = depth_from_score(best, n)
+    alts = s[valid & (s != best)]
+    if len(alts) == 0:
+        return 0
+    if (alts >= 0).any():
+        return d
+    return min(d, max(depth_from_score(int(a), n) for a in alts))
+
+
+def search_baseline_accuracy(scores: np.ndarray, n: int, k: int) -> float:
+    """Expected optimal-move accuracy of a depth-k search with no evaluation function,
+    computed exactly from the solver's per-column scores (no search needed).
+
+    The search plays the fastest win it can prove within k plies. If it proves no
+    win, it picks uniformly among the moves it cannot prove lose within k plies (or
+    among all legal moves if every move provably loses). A move's outcome is
+    provable within k plies iff the game ends within k plies of playing it."""
+    s = np.asarray(scores)
+    valid = s != INVALID
+    best = int(s[valid].max())
+    moves = [(int(v), depth_from_score(int(v), n)) for v in s[valid]]
+    if any(v > 0 and dist <= k for v, dist in moves):
+        return 1.0  # iterative deepening finds the fastest win first
+    candidates = [v for v, dist in moves if not (v < 0 and dist <= k)] or [v for v, _ in moves]
+    return sum(v == best for v in candidates) / len(candidates)
+
+
 # ------------------------------------------------------------------ solver
 
 
@@ -239,6 +282,7 @@ def label(move_strings: list[str], scores: np.ndarray) -> dict:
         value=np.sign(best).astype(np.int8),     # +1 win / 0 draw / -1 loss for side to move
         score=best.astype(np.int16),
         depth=np.array([depth_from_score(int(s), int(k)) for s, k in zip(best, n)], dtype=np.int16),
+        req_depth=np.array([required_depth(s, int(k)) for s, k in zip(scores, n)], dtype=np.int16),
     )
 
 

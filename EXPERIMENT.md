@@ -70,6 +70,35 @@ The solver run is the risky step for the home network. It starved AdGuard last t
   - If 1–2 background workers leave DNS at baseline and finish in under about 24 hours, build here with a guarded, sharded, resumable runner, like `run_c4_train.sh`, writing shards so a guard stop loses nothing.
   - Otherwise build on a laptop or a cloud VM. The pilot dataset took about 12 minutes per 1M positions on an 8-core laptop.
 
+### 3.5 Stage 0 results (2026-11-20)
+
+**Solver on this machine** (safe-random positions at plies 6–36, nice 19 + background QoS, DNS probed every 2 s):
+
+| Workers | Positions/s | Memory | DNS failures | Free memory |
+|---|---|---|---|---|
+| 1 | 48 | 113 MB | 2 of 221 (0.9%) | ≥ 72% |
+| 2 | 101 | 227 MB | 1 of 88 (1.1%) | ≥ 73% |
+
+Both are below AdGuard's own baseline failure rate (2.9%, measured with nothing running). Positions at plies 12–16 are the slowest (mean 80 ms, max 1.7 s), because they fall just past the opening book. **The dataset can be built here with 2 background workers.**
+
+**r label:** `required_depth` in `connect4.py`. It matches brute-force depth-limited search on every won test position (`test_required_depth_matches_search`). The search baseline, `search_baseline_accuracy`, is computed exactly from the per-column scores, so it needs no search code. The test checks it is certain to be right exactly from k = r on.
+
+**Yield** (6,000 safe-random positions): 58% are won, and 35% are won with a unique winning move.
+
+| r | Unique-win positions per 6,000 | Plies 6–16 | 17–26 | 27–36 |
+|---|---|---|---|---|
+| 1 | 469 | 7 | 96 | 366 |
+| 2–4 | 618 | 145 | 256 | 217 |
+| 5–6 | 113 | 23 | 62 | 28 |
+| 7–8 | 82 | 26 | 31 | 25 |
+| 9–12 | 121 | 49 | 37 | 35 |
+| 13–16 | 94 | 27 | 53 | 14 |
+| ≥ 17 | 584 | 479 | 105 | 0 |
+
+r and d differ for about half the positions in bucket 2–4 and for 8–12% of the deeper buckets. r is often even (elimination by refutation), so the buckets include even r. The rarest cells (r 13–16 late in the game; r 5–6 early) need roughly 200–300k solved positions to reach about 500 per cell.
+
+**Revision to 3.1.** A depth-4 alpha-beta engine in Python would be slower than the solver itself. Python sampling of safe-random play already runs at only about 80 positions/s per worker. Instead, generate **near-optimal games with the solver**: at every ply, play a random optimal move with probability 1 − ε, else a random safe move, and **keep every position along the game** with its scores. Each solve then produces a dataset position, at no extra cost. Mix: 50% near-optimal trajectories (ε ∈ {0.1, 0.3}), 50% safe-random. Split by game, not by position, since positions in one game are correlated. Budget: about 2.5M solved positions at about 100/s, roughly 7 hours.
+
 ## 4. Models
 
 All models: MLP mixer, d_model 256, about 1.25M parameters unless stated. Same input encoding and heads (policy over the optimal set, value).
