@@ -1,0 +1,123 @@
+{
+  "source": "runs/c4eval-c4-direct-overnight/results.npz",
+  "n": 10000,
+  "steps": 1,
+  "move_acc": 0.8409,
+  "value_acc": 0.7946,
+  "move_acc_by_step": [
+    0.8409
+  ],
+  "spearman_depth_vs_steps_needed": 0.0234,
+  "by_depth": [
+    {
+      "depth": "1",
+      "n": 1000,
+      "move_acc": 0.969,
+      "value_acc": 0.958,
+      "move_acc_by_step": [
+        0.969
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "2",
+      "n": 1000,
+      "move_acc": 1.0,
+      "value_acc": 0.86,
+      "move_acc_by_step": [
+        1.0
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "3-4",
+      "n": 1000,
+      "move_acc": 0.867,
+      "value_acc": 0.857,
+      "move_acc_by_step": [
+        0.867
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "5-6",
+      "n": 1000,
+      "move_acc": 0.803,
+      "value_acc": 0.832,
+      "move_acc_by_step": [
+        0.803
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "7-8",
+      "n": 1000,
+      "move_acc": 0.794,
+      "value_acc": 0.804,
+      "move_acc_by_step": [
+        0.794
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "9-12",
+      "n": 1000,
+      "move_acc": 0.802,
+      "value_acc": 0.793,
+      "move_acc_by_step": [
+        0.802
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "13-16",
+      "n": 1000,
+      "move_acc": 0.778,
+      "value_acc": 0.762,
+      "move_acc_by_step": [
+        0.778
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "17-24",
+      "n": 1000,
+      "move_acc": 0.763,
+      "value_acc": 0.823,
+      "move_acc_by_step": [
+        0.763
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "25-42",
+      "n": 1000,
+      "move_acc": 0.781,
+      "value_acc": 0.833,
+      "move_acc_by_step": [
+        0.781
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    },
+    {
+      "depth": "draw",
+      "n": 1000,
+      "move_acc": 0.852,
+      "value_acc": 0.424,
+      "move_acc_by_step": [
+        0.852
+      ],
+      "mean_steps_needed_if_solved": 1.0,
+      "mean_halt_step": null
+    }
+  ]
+}
