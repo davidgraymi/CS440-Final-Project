@@ -232,6 +232,8 @@ def train_args(argv=None):
     p.add_argument("--ema", type=float, default=0.999)
     p.add_argument("--grad-clip", type=float, default=1.0)
     p.add_argument("--halt-explore", type=float, default=0.1)
+    p.add_argument("--no-halt", dest="halt", action="store_false",
+                   help="always run all n_sup steps in training (halting head is still trained)")
     p.add_argument("--value-weight", type=float, default=0.5)
     p.add_argument("--no-mirror", dest="mirror", action="store_false")
     p.add_argument("--dtype", choices=["auto", "bf16", "fp32"], default="auto", help="auto: bf16 on CUDA, else fp32")
@@ -273,7 +275,7 @@ def train_main(argv=None):
     loader = DataLoader(C4Dataset(train, args.mirror), args.batch_size, shuffle=True, drop_last=True,
                         num_workers=args.workers, worker_init_fn=worker_init,
                         persistent_workers=args.workers > 0, pin_memory=device.type == "cuda")
-    batch = RollingBatch(model, ExampleStream(loader, device), args.batch_size, args.halt_explore)
+    batch = RollingBatch(model, ExampleStream(loader, device), args.batch_size, args.halt_explore, args.halt)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.95))
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1.0, (s + 1) / max(1, args.warmup)))
     loss_fn = lambda out, y: game_loss(out, y, args.value_weight)  # noqa: E731

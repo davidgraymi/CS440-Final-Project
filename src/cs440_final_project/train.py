@@ -97,8 +97,9 @@ class ExampleStream:
 class RollingBatch:
     """B slots, each holding one example mid-way through its supervision steps."""
 
-    def __init__(self, model, stream: ExampleStream, batch_size: int, explore: float):
-        self.model, self.stream, self.B, self.explore = model, stream, batch_size, explore
+    def __init__(self, model, stream: ExampleStream, batch_size: int, explore: float, halt: bool = True):
+        """halt=False: every example runs all n_sup supervision steps."""
+        self.model, self.stream, self.B, self.explore, self.halt = model, stream, batch_size, explore, halt
         dev = stream.device
         self.x, self.y = stream.take(batch_size)
         self.carry = model.init_carry(batch_size, dev)
@@ -122,7 +123,7 @@ class RollingBatch:
         n_sup = self.model.n_sup
         self.steps += 1
         halted = self.steps >= n_sup
-        if q is not None and n_sup > 1:
+        if self.halt and q is not None and n_sup > 1:
             halted |= q.detach() > 0
             explore = torch.rand_like(q) < self.explore
             min_steps = explore * torch.randint_like(self.steps, 2, n_sup + 1)
@@ -184,6 +185,7 @@ def parse_args(argv=None):
     p.add_argument("--ema", type=float, default=0.999)
     p.add_argument("--grad-clip", type=float, default=0.0, help="0 disables (official: none)")
     p.add_argument("--halt-explore", type=float, default=0.1)
+    p.add_argument("--no-halt", dest="halt", action="store_false", help="always run all n_sup steps in training")
     p.add_argument("--loss", choices=["stablemax", "softmax"], default="stablemax")
     p.add_argument("--no-augment", dest="augment", action="store_false")
     p.add_argument("--dtype", choices=["auto", "bf16", "fp32"], default="auto", help="auto: bf16 on CUDA, else fp32")
@@ -231,7 +233,7 @@ def main(argv=None):
     loader = DataLoader(train_ds, args.batch_size, shuffle=True, drop_last=True, num_workers=args.workers,
                         worker_init_fn=worker_init, persistent_workers=args.workers > 0,
                         pin_memory=device.type == "cuda")
-    batch = RollingBatch(model, ExampleStream(loader, device), args.batch_size, args.halt_explore)
+    batch = RollingBatch(model, ExampleStream(loader, device), args.batch_size, args.halt_explore, args.halt)
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.95))
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1.0, (s + 1) / max(1, args.warmup)))

@@ -1,5 +1,7 @@
 # CS440-Final-Project
 
+> Current status, results and next steps: [PLAN.md](PLAN.md).
+
 ## Topics
 
 1. Searchless models
@@ -150,6 +152,18 @@ The model sees the 42 cells from the side to move's point of view. It predicts a
 `c4-eval` records, for every test position and every supervision step, whether the chosen move is optimal. It writes `summary.json` and `move_acc_vs_steps_by_depth.png`, which give accuracy per depth bucket, the step at which each position is solved, and the learned halting step against depth.
 
 Defaults: d_model 512, batch 768, lr 2e-4, weight decay 0.1, 50k steps, MLP mixer. On an M3 laptop (MPS), a 1.25M-parameter model (`--d-model 256 --batch-size 256`) takes about 1.45 s per step. Use the laptop for short runs and the GPU server for full runs.
+
+### Connect Four pilot results (overnight, M1 Mac mini)
+
+All three models trained for the same number of steps (17,616) and were evaluated on 10,000 depth-balanced test positions:
+
+| Model | Params | Optimal-move accuracy | Value accuracy |
+|---|---|---|---|
+| **TRM** | 1.25M | **89.7%** | 83.3% |
+| ds-only | 1.25M | 85.8% | 80.2% |
+| direct (8 layers) | 5.0M | 84.1% | 79.5% |
+
+Recursion helps, but TRM learned to answer in its first supervision step, so steps 2–16 add nothing yet. See `PLAN.md` for the analysis and next steps. Raw results are in `results/c4-overnight/`.
 
 ### Training (long run, on a GPU server)
 
