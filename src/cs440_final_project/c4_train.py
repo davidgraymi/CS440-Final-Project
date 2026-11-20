@@ -245,6 +245,11 @@ def train_args(argv=None):
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--train-limit", type=int, default=0, help="use only the first N training positions (smoke tests)")
+    p.add_argument("--resume", action="store_true",
+                   help="continue from runs/<run-name>/ckpt.pt (model, EMA, optimizer, schedule, step) if it exists")
+    p.add_argument("--patience", type=int, default=0,
+                   help="stop after this many evals in a row without beating the best move accuracy by --min-delta (0: off)")
+    p.add_argument("--min-delta", type=float, default=0.002)
     # Keeps train.train_step's puzzle-only options defined.
     p.set_defaults(loss="stablemax")
     return p.parse_args(argv)
@@ -290,14 +295,47 @@ def train_main(argv=None):
     print(f"{run_name}: {kind} {n_params / 1e6:.2f}M params, depth/step {model.effective_depth()}, "
           f"n_sup {model.n_sup}, train {len(train['tokens'])}, device {device}, bf16 {use_bf16}", flush=True)
 
+    # Resume: restore weights, EMA, optimizer and LR schedule, and continue the step count.
+    start, best, bad_evals = 0, -1.0, 0
+    ckpt_path = run_dir / "ckpt.pt"
+    if args.resume and ckpt_path.exists():
+        ck = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+        model.load_state_dict(ck["model"])
+        ema.module.load_state_dict(ck["ema"])
+        if "opt" in ck:
+            opt.load_state_dict(ck["opt"])
+            sched.load_state_dict(ck["sched"])
+            if "n_averaged" in ck:
+                ema.n_averaged.fill_(ck["n_averaged"])
+        start, best, bad_evals = ck["step"], ck.get("best", -1.0), ck.get("bad_evals", 0)
+        torch.manual_seed(args.seed + start)  # new data order after a resume
+        print(f"resumed from {ckpt_path} at step {start} (best move acc {best:.4f})", flush=True)
+
+    def save(step, path=ckpt_path):
+        tmp = path.with_suffix(".tmp")
+        torch.save(dict(model=model.state_dict(), ema=ema.module.state_dict(), cfg=asdict(cfg), kind=kind,
+                        step=step, opt=opt.state_dict(), sched=sched.state_dict(),
+                        n_averaged=int(ema.n_averaged.item()), best=best, bad_evals=bad_evals), tmp)
+        tmp.replace(path)  # atomic: a kill mid-save never leaves a broken checkpoint
+
+    # SIGTERM/SIGINT (e.g. from the DNS/memory guard): finish the current step, save, exit.
+    import signal
+    stop_signal = []
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda s, f: stop_signal.append(s))
+
     with open(run_dir / "log.jsonl", "a") as log:
         def emit(rec):
             print(json.dumps(rec), flush=True)
             log.write(json.dumps(rec) + "\n")
             log.flush()
 
-        t0, window = time.time(), []
-        for step in range(1, args.steps + 1):
+        t0, window, step = time.time(), [], start
+        for step in range(start + 1, args.steps + 1):
+            if stop_signal:
+                save(step - 1)
+                emit(dict(step=step - 1, stopped=f"signal {stop_signal[0]}", resumable=True))
+                return
             window.append(train_step(model, opt, sched, ema, batch, args, autocast, loss_fn))
             if step % 100 == 0:
                 emit(dict(step=step, sec=round(time.time() - t0, 1),
@@ -307,15 +345,29 @@ def train_main(argv=None):
             if step % args.eval_every == 0 or step == args.steps or out_of_time:
                 with autocast:
                     move_ok, value_ok, _ = run_eval(ema.module, test, device, args.eval_batch_size)
+                if device.type == "mps":
+                    torch.mps.empty_cache()
                 b = bucket_of(test["depth"], test["value"])
+                acc = float(move_ok[:, -1].mean())
+                improved = acc > best + args.min_delta
+                if improved:
+                    best, bad_evals = acc, 0
+                else:
+                    bad_evals += 1
                 emit(dict(step=step, eval=dict(
-                    move_acc=round(float(move_ok[:, -1].mean()), 4),
+                    move_acc=round(acc, 4),
                     value_acc=round(float(value_ok[:, -1].mean()), 4),
+                    best=round(best, 4), evals_without_improvement=bad_evals,
                     move_acc_by_step=[round(float(v), 4) for v in move_ok.mean(0)],
                     move_acc_by_depth={n: round(float(move_ok[b == k, -1].mean()), 4)
                                        for k, n in enumerate(BUCKET_NAMES) if (b == k).any()})))
-                torch.save(dict(model=model.state_dict(), ema=ema.module.state_dict(), cfg=asdict(cfg),
-                                kind=kind, step=step), run_dir / "ckpt.pt")
+                save(step)
+                if improved:
+                    save(step, run_dir / "best.pt")
+                if args.patience and bad_evals >= args.patience:
+                    emit(dict(step=step, stopped=f"no improvement > {args.min_delta} in {bad_evals} evals",
+                              best=round(best, 4)))
+                    break
             if out_of_time:
                 emit(dict(step=step, stopped="time limit", minutes=round((time.time() - t0) / 60, 1)))
                 break
