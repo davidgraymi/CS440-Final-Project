@@ -7,7 +7,8 @@
 #   - nice 19 (+ macOS background QoS unless QOS_BG=0); 2 CPU threads, 2 loader workers
 #   - PyTorch MPS memory capped at MPS_MEM_RATIO of the GPU working set (0.3 ~= 3.2 GB)
 #   - guard every 10 s:
-#       * DNS failing 2 checks in a row, or slower than DNS_MAX_MS 3 in a row -> stop
+#       * DNS failing DNS_FAIL_LIMIT (3) checks in a row, or slower than DNS_MAX_MS 3 in a row -> stop
+#         (AdGuard drops ~3% of probes on its own, so 2 in a row would trip several times a day)
 #       * AdGuardHome process missing -> stop
 #       * free memory below HARD_MIN_FREE_PCT -> stop
 #       * free memory below MIN_FREE_PCT for LOW_MEM_MINUTES in a row -> stop
@@ -23,7 +24,7 @@
 #   nohup scripts/run_c4_train.sh > runs/c4-train-smallstep.log 2>&1 &
 # Overrides: RUN_NAME=c4-trm-smallstep T=1 N=2 D_MODEL=256 BATCH=128 STEPS=1000000
 #   EVAL_EVERY=2000 PATIENCE=10 TIME_LIMIT_MIN=0 EXTRA_ARGS= MPS_MEM_RATIO=0.3
-#   MIN_FREE_PCT=25 LOW_MEM_MINUTES=3 HARD_MIN_FREE_PCT=15 DNS_SERVER=192.168.0.253 DNS_MAX_MS=200
+#   MIN_FREE_PCT=25 LOW_MEM_MINUTES=3 HARD_MIN_FREE_PCT=15 DNS_SERVER=192.168.0.253 DNS_MAX_MS=200 DNS_FAIL_LIMIT=3
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -42,6 +43,7 @@ LOW_MEM_CHECKS=$(( ${LOW_MEM_MINUTES:-3} * 6 ))
 HARD_MIN_FREE=${HARD_MIN_FREE_PCT:-15}
 DNS_SERVER=${DNS_SERVER:-192.168.0.253}
 DNS_MAX_MS=${DNS_MAX_MS:-200}
+DNS_FAIL_LIMIT=${DNS_FAIL_LIMIT:-3}
 GLOG=runs/$RUN_NAME-guard.log
 
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_MEM_RATIO:-0.3}
@@ -82,7 +84,7 @@ stop() {
   exit 2
 }
 
-echo "$(date +%T) | trainer pid $JOB ($RUN_NAME) started; guard: dns fail x2 or >${DNS_MAX_MS}ms x3," \
+echo "$(date +%T) | trainer pid $JOB ($RUN_NAME) started; guard: dns fail x${DNS_FAIL_LIMIT} or >${DNS_MAX_MS}ms x3," \
      "free<${HARD_MIN_FREE}% or <${MIN_FREE}% for ${LOW_MEM_CHECKS} checks, AdGuard gone (pre: dns ${pre_dns} ms, free ${pre_free}%)" | tee -a "$GLOG"
 dns_fail=0 dns_slow=0 mem_low=0
 while kill -0 $JOB 2>/dev/null; do
@@ -94,7 +96,7 @@ while kill -0 $JOB 2>/dev/null; do
   rss=$(ps -axo rss,command | awk '/train_main/ && !/awk/ {s += $1} END {printf "%d", s/1024}')
   echo "$(date +%T) | free ${free:-?}% | dns ${dns:-FAIL} ms | trainer rss ${rss} MB" >> "$GLOG"
   pgrep -q AdGuardHome || stop "AdGuardHome process not running"
-  [ "$dns_fail" -ge 2 ] && stop "DNS failed $dns_fail checks in a row"
+  [ "$dns_fail" -ge "$DNS_FAIL_LIMIT" ] && stop "DNS failed $dns_fail checks in a row"
   [ "$dns_slow" -ge 3 ] && stop "DNS slower than ${DNS_MAX_MS} ms $dns_slow checks in a row"
   [ -n "$free" ] && [ "$free" -lt "$HARD_MIN_FREE" ] && stop "free memory ${free}% < ${HARD_MIN_FREE}%"
   [ "$mem_low" -ge "$LOW_MEM_CHECKS" ] && stop "free memory below ${MIN_FREE}% for $mem_low checks"
