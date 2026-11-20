@@ -234,6 +234,8 @@ def train_args(argv=None):
     p.add_argument("--halt-explore", type=float, default=0.1)
     p.add_argument("--no-halt", dest="halt", action="store_false",
                    help="always run all n_sup steps in training (halting head is still trained)")
+    p.add_argument("--step-weight", choices=["uniform", "linear", "final"], default="uniform",
+                   help="task-loss weight by supervision step; linear/final push the model to use later steps")
     p.add_argument("--value-weight", type=float, default=0.5)
     p.add_argument("--no-mirror", dest="mirror", action="store_false")
     p.add_argument("--dtype", choices=["auto", "bf16", "fp32"], default="auto", help="auto: bf16 on CUDA, else fp32")

@@ -136,6 +136,22 @@ def puzzle_loss(logits, y, kind: str = "stablemax"):
     return token_loss(logits, y, kind), (logits.argmax(-1) == y).all(-1)
 
 
+def step_weights(step: torch.Tensor, n_sup: int, kind: str) -> torch.Tensor | float:
+    """Task-loss weight for each example by its supervision step (1..n_sup); weights
+    average 1 over the steps, so the effective learning rate is unchanged.
+      uniform: every step counts the same (TRM default; rewards answering early)
+      linear:  w = 2s / (n_sup + 1), so later steps count more (step 1 ~0.12, step 16 ~1.88 at n_sup=16)
+      final:   only the last step is graded (w = n_sup there, 0 elsewhere)"""
+    if kind == "uniform" or n_sup <= 1:
+        return 1.0
+    s = step.float()
+    if kind == "linear":
+        return 2 * s / (n_sup + 1)
+    if kind == "final":
+        return (step >= n_sup).float() * n_sup
+    raise ValueError(f"unknown step weighting {kind!r}")
+
+
 def train_step(model, opt, sched, ema, batch: RollingBatch, args, autocast, loss_fn=None) -> dict:
     """One supervision step on every slot of the rolling batch, then one update.
     `loss_fn(outputs, y) -> (per-example task loss, per-example correct)`;
@@ -145,7 +161,7 @@ def train_step(model, opt, sched, ema, batch: RollingBatch, args, autocast, loss
     with autocast:
         batch.carry, out, q = model.step(batch.x, batch.carry)
         task, correct = loss_fn(out, batch.y)
-        loss = task
+        loss = task * step_weights(batch.steps + 1, model.n_sup, getattr(args, "step_weight", "uniform"))
         if q is not None:
             loss = loss + 0.5 * F.binary_cross_entropy_with_logits(q, correct.float(), reduction="none")
         loss = loss.mean()
