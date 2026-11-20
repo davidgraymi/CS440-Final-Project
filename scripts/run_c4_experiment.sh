@@ -49,8 +49,10 @@ minutes_left() { echo $(( (deadline_s - $(date +%s)) / 60 - EVAL_RESERVE_MIN ));
 share() { awk -v m="$(minutes_left)" -v f="$1" 'BEGIN { v = m * f; print (v > 5 ? int(v) : 5) }'; }
 
 guard() {
+  set +e +o pipefail  # a failed probe (e.g. DNS timeout) must not kill the guard
+  echo "$(date +%T) | guard started (DNS @$DNS_SERVER, stop below ${MIN_FREE}% free)" >> runs/c4-guard.log
   while sleep 30; do
-    free=$(memory_pressure | awk -F': ' '/free percentage/ {gsub("%", "", $2); print $2}')
+    free=$(memory_pressure 2>/dev/null | awk -F': ' '/free percentage/ {gsub("%", "", $2); print $2}')
     dns=$(dig +tries=1 +time=2 @"$DNS_SERVER" example.com 2>/dev/null | awk '/Query time/ {print $4}')
     echo "$(date +%T) | mem free ${free:-?}% | dns ${dns:-FAIL} ms" >> runs/c4-guard.log
     if [ -n "$free" ] && [ "$free" -lt "$MIN_FREE" ]; then
