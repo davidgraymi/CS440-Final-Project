@@ -46,7 +46,10 @@ EVAL_RESERVE_MIN=40   # final evaluations of all three models
 
 # PyTorch MPS allocations stop at this fraction of the GPU's recommended working
 # set (~10.7 GB on a 16 GB Mac): 0.4 ~= 4.3 GB.
+# The low (soft, start-reclaiming) watermark must not exceed the high one; its
+# default (1.4) does, so set it to 75% of the cap.
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_MEM_RATIO:-0.4}
+export PYTORCH_MPS_LOW_WATERMARK_RATIO=$(awk -v h="$PYTORCH_MPS_HIGH_WATERMARK_RATIO" 'BEGIN { print h * 0.75 }')
 export OMP_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS
 run() { nice -n 19 "$@"; }
 mkdir -p runs
@@ -55,6 +58,11 @@ deadline_s=$(date -j -f "%Y-%m-%d %H:%M" "$(date +%F) $DEADLINE" +%s)
 [ "$deadline_s" -le "$(date +%s)" ] && deadline_s=$((deadline_s + 86400))
 minutes_left() { echo $(( (deadline_s - $(date +%s)) / 60 - EVAL_RESERVE_MIN )); }
 share() { awk -v m="$(minutes_left)" -v f="$1" 'BEGIN { v = m * f; print (v > 5 ? int(v) : 5) }'; }
+EVAL_PER_BUCKET=1000
+if [ "${SMOKE:-0}" = 1 ]; then  # pipeline test: 1-minute trainings, tiny evals
+  share() { echo 1; }
+  EVAL_PER_BUCKET=20
+fi
 
 dns_ms() {  # query time in ms, empty on failure
   dig +tries=1 +time=2 @"$DNS_SERVER" example.com 2>/dev/null | awk '/Query time/ {print $4}' || true
@@ -67,7 +75,7 @@ stop_all() {
   exit 0
 }
 
-pre=$(dns_ms)
+pre=$( { dns_ms; dns_ms; dns_ms; } | sort -n | head -1)  # best of 3
 if [ -z "$pre" ] || [ "$pre" -gt "$DNS_MAX_MS" ]; then
   echo "$(date) | DNS @$DNS_SERVER unhealthy before starting (${pre:-no answer})" | tee -a runs/c4-guard.log
   [ "$DNS_STOP" = 1 ] && exit 1
@@ -121,7 +129,7 @@ for m in trm ds-only direct; do
   out="runs/c4eval-c4-$m-$TAG"
   if [ ! -f "$out/summary.json" ]; then
     echo "$(date) | evaluating $m"
-    run uv run c4-eval --ckpt "runs/c4-$m-$TAG/ckpt.pt" --per-bucket 1000 --device mps --batch-size 512 --out "$out"
+    run uv run c4-eval --ckpt "runs/c4-$m-$TAG/ckpt.pt" --per-bucket "$EVAL_PER_BUCKET" --device mps --batch-size 512 --out "$out"
   fi
 done
 echo "$(date) | done (deadline $(date -r "$deadline_s"))"
