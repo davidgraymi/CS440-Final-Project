@@ -1,0 +1,10 @@
+{
+  "ckpt": "runs/c4-direct-overnight/ckpt.pt",
+  "analyze": null,
+  "data_prefix": "/Users/serveradmin/git/CS440-Final-Project/data/c4",
+  "per_bucket": 1000,
+  "steps": null,
+  "batch_size": 512,
+  "device": "mps",
+  "out": "runs/c4eval-c4-direct-overnight"
+}

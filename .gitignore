@@ -221,3 +221,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project artifacts
+data/*
+runs/
+third_party/
+!data/c4_train.npz
+!data/c4_test.npz
