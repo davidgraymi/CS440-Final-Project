@@ -225,3 +225,4 @@ __marimo__/
 # Project artifacts
 data/
 runs/
+third_party/

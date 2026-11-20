@@ -126,6 +126,15 @@ What this shows, before we train anything:
 * **The model knows when to stop.** The learned halting step tracks difficulty as well (Spearman 0.31). Halting early costs only 1.75 points of accuracy compared with always running all 16 steps.
 * **The relationship is not monotonic past the easiest puzzles.** Puzzles rated 10–24 are the hardest for TRM, not those rated 50+. tdoku's backtrack count measures difficulty *for a backtracking solver*, which is only a rough proxy for the depth TRM needs. Connect Four's exact moves-to-win labels (Tier 2) avoid this problem.
 
+### Connect Four dataset (Tier 2 labels)
+
+```bash
+scripts/setup_connect4_solver.sh                       # fetch + build Pascal Pons' solver (AGPL-3.0, kept in third_party/)
+uv run c4-data --num 1000000 --test-per-bucket 2000     # ~12 min on an 8-core laptop
+```
+
+The script samples unique, non-terminal positions by random play: 80% from "safe" random play, which blocks threats and never hands the opponent an immediate win, and 20% from uniform random play. Each position is labeled with the solver's exact score for every column. From those scores we derive the optimal moves, the game value and **d, the number of plies until the game ends under optimal play**. The formula for d is in `connect4.py`, and `tests/test_connect4.py` checks it against exhaustive search. The test set has the same number of positions in each depth bucket (1, 2, 3–4, 5–6, 7–8, 9–12, 13–16, 17–24, 25+, and draws). The output files are `data/c4_train.npz` and `data/c4_test.npz`.
+
 ### Training (long run, on a GPU server)
 
 ```bash
