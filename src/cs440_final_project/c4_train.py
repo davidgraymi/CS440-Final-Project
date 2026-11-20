@@ -217,6 +217,8 @@ def train_args(argv=None):
     p.add_argument("--T", type=int)
     p.add_argument("--n-sup", type=int)
     p.add_argument("--steps", type=int, default=50_000, help="optimizer steps")
+    p.add_argument("--time-limit-min", type=float, default=0,
+                   help="stop after this many minutes of training (0: no limit); evaluates and saves before exiting")
     p.add_argument("--batch-size", type=int, default=768)
     p.add_argument("--lr", type=float, default=2e-4)
     p.add_argument("--weight-decay", type=float, default=0.1)
@@ -293,7 +295,8 @@ def train_main(argv=None):
                 emit(dict(step=step, sec=round(time.time() - t0, 1),
                           **{k: float(np.nanmean([w[k] for w in window])) for k in window[0]}))
                 window = []
-            if step % args.eval_every == 0 or step == args.steps:
+            out_of_time = args.time_limit_min > 0 and time.time() - t0 > 60 * args.time_limit_min
+            if step % args.eval_every == 0 or step == args.steps or out_of_time:
                 with autocast:
                     move_ok, value_ok, _ = run_eval(ema.module, test, device, args.eval_batch_size)
                 b = bucket_of(test["depth"], test["value"])
@@ -305,6 +308,10 @@ def train_main(argv=None):
                                        for k, n in enumerate(BUCKET_NAMES) if (b == k).any()})))
                 torch.save(dict(model=model.state_dict(), ema=ema.module.state_dict(), cfg=asdict(cfg),
                                 kind=kind, step=step), run_dir / "ckpt.pt")
+            if out_of_time:
+                emit(dict(step=step, stopped="time limit", minutes=round((time.time() - t0) / 60, 1)))
+                break
+        (run_dir / "done.json").write_text(json.dumps(dict(step=step, minutes=round((time.time() - t0) / 60, 1))))
 
 
 # -------------------------------------------------------------------- c4-eval

@@ -1,23 +1,28 @@
 #!/usr/bin/env bash
-# Full Connect Four experiment on a shared Mac (Apple silicon, MPS), keeping
-# headroom for other services (AdGuard DNS in Docker):
+# Connect Four experiment on a shared Mac (Apple silicon, MPS) that must finish
+# by a deadline, keeping headroom for services on the same machine (AdGuard,
+# Traefik, Uptime Kuma):
 #   - everything runs at the lowest CPU priority (nice 19)
 #   - CPU threads / workers leave RESERVE_CORES cores free
-#   - PyTorch's GPU memory is capped (MPS shares RAM with the CPU and Docker)
+#   - PyTorch's GPU memory is capped (MPS shares RAM with everything else)
 #   - a guard logs free memory and DNS latency every 30 s and stops the
 #     experiment if free memory drops below MIN_FREE_PCT
 #   - the Mac is kept awake (caffeinate) while it runs
 #
+# Schedule: build data if needed, then train TRM for most of the time left
+# before DEADLINE. ds-only and direct then train for the SAME number of
+# optimizer steps TRM reached (same data and updates, less compute per step),
+# each capped to its share of the remaining time. Evaluations run last.
+#
 # Usage (from the repo root):
 #   mkdir -p runs && nohup scripts/run_c4_experiment.sh > runs/c4-experiment.log 2>&1 &
 #
-# Overrides (environment): RESERVE_CORES=2 MPS_MEM_RATIO=0.4 MIN_FREE_PCT=25
-#   D_MODEL=256 BATCH=128 STEPS=30000 MODELS="trm ds-only direct" DNS_SERVER=127.0.0.1
-# Re-running skips finished stages (dataset, finished trainings, evals);
-# an unfinished training restarts from scratch.
+# Overrides (environment): DEADLINE=07:00 RESERVE_CORES=2 MPS_MEM_RATIO=0.4
+#   MIN_FREE_PCT=25 D_MODEL=256 BATCH=128 DNS_SERVER=127.0.0.1 TAG=overnight
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+DEADLINE=${DEADLINE:-07:00}
 RESERVE=${RESERVE_CORES:-2}
 TOTAL=$(sysctl -n hw.ncpu)
 USE=$((TOTAL - RESERVE))
@@ -28,16 +33,20 @@ MIN_FREE=${MIN_FREE_PCT:-25}
 DNS_SERVER=${DNS_SERVER:-127.0.0.1}
 D_MODEL=${D_MODEL:-256}
 BATCH=${BATCH:-128}
-STEPS=${STEPS:-30000}
-MODELS=${MODELS:-"trm ds-only direct"}
+TAG=${TAG:-overnight}
+EVAL_RESERVE_MIN=40   # final evaluations of all three models
 
 # PyTorch MPS allocations stop at this fraction of the GPU's recommended working
-# set (~10.7 GB on a 16 GB Mac): 0.4 ~= 4.3 GB. Raise it only if training OOMs
-# and memory headroom allows.
+# set (~10.7 GB on a 16 GB Mac): 0.4 ~= 4.3 GB.
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_MEM_RATIO:-0.4}
 export OMP_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS
 run() { nice -n 19 "$@"; }
 mkdir -p runs
+
+deadline_s=$(date -j -f "%Y-%m-%d %H:%M" "$(date +%F) $DEADLINE" +%s)
+[ "$deadline_s" -le "$(date +%s)" ] && deadline_s=$((deadline_s + 86400))
+minutes_left() { echo $(( (deadline_s - $(date +%s)) / 60 - EVAL_RESERVE_MIN )); }
+share() { awk -v m="$(minutes_left)" -v f="$1" 'BEGIN { v = m * f; print (v > 5 ? int(v) : 5) }'; }
 
 guard() {
   while sleep 30; do
@@ -57,8 +66,9 @@ GUARD=$!
 caffeinate -i -w $$ &
 trap 'kill $GUARD 2>/dev/null || true' EXIT
 
-echo "$(date) | $TOTAL cores, using $USE (threads $THREADS) | MPS mem ratio $PYTORCH_MPS_HIGH_WATERMARK_RATIO" \
-     "| d_model $D_MODEL batch $BATCH steps $STEPS | guard: free >= ${MIN_FREE}%, DNS @$DNS_SERVER"
+echo "$(date) | deadline $(date -r "$deadline_s") | $TOTAL cores, using $USE (threads $THREADS)" \
+     "| MPS mem ratio $PYTORCH_MPS_HIGH_WATERMARK_RATIO | d_model $D_MODEL batch $BATCH" \
+     "| guard: free >= ${MIN_FREE}%, DNS @$DNS_SERVER"
 
 run uv sync
 run scripts/setup_connect4_solver.sh
@@ -67,22 +77,26 @@ if [ ! -f data/c4_test.npz ]; then
   run uv run c4-data --num 1000000 --test-per-bucket 2000 --workers "$USE"
 fi
 
-for m in $MODELS; do
-  if ! grep -q "\"step\": $STEPS, \"eval\"" "runs/c4-$m/log.jsonl" 2>/dev/null; then
-    echo "$(date) | training $m"
-    rm -rf "runs/c4-$m"
-    run uv run c4-train --model "$m" --d-model "$D_MODEL" --batch-size "$BATCH" --steps "$STEPS" \
-        --workers "$LOADERS" --device mps --run-name "c4-$m"
-  fi
-  if [ ! -f "runs/c4eval-c4-$m/summary.json" ]; then
+train() {  # train <model> <max steps> <minutes>
+  local name="c4-$1-$TAG"
+  if [ -f "runs/$name/done.json" ]; then echo "$(date) | $name already done"; return; fi
+  echo "$(date) | training $1 for up to $3 min / $2 steps"
+  rm -rf "runs/$name"
+  run uv run c4-train --model "$1" --d-model "$D_MODEL" --batch-size "$BATCH" --steps "$2" \
+      --time-limit-min "$3" --eval-every 2000 --workers "$LOADERS" --device mps --run-name "$name"
+}
+
+train trm 1000000 "$(share 0.75)"
+TRM_STEPS=$(uv run python -c "import json; print(json.load(open('runs/c4-trm-$TAG/done.json'))['step'])")
+echo "$(date) | TRM reached $TRM_STEPS steps; matching that for the baselines"
+train ds-only "$TRM_STEPS" "$(share 0.65)"
+train direct "$TRM_STEPS" "$(share 0.9)"
+
+for m in trm ds-only direct; do
+  out="runs/c4eval-c4-$m-$TAG"
+  if [ ! -f "$out/summary.json" ]; then
     echo "$(date) | evaluating $m"
-    run uv run c4-eval --ckpt "runs/c4-$m/ckpt.pt" --device mps --batch-size 512 --out "runs/c4eval-c4-$m"
+    run uv run c4-eval --ckpt "runs/c4-$m-$TAG/ckpt.pt" --per-bucket 1000 --device mps --batch-size 512 --out "$out"
   fi
 done
-
-# Does thinking longer than trained help? (TRM only)
-if [[ " $MODELS " == *" trm "* ]] && [ ! -f runs/c4eval-c4-trm-steps32/summary.json ]; then
-  run uv run c4-eval --ckpt runs/c4-trm/ckpt.pt --steps 32 --device mps --batch-size 512 \
-      --out runs/c4eval-c4-trm-steps32
-fi
-echo "$(date) | done"
+echo "$(date) | done (deadline $(date -r "$deadline_s"))"
