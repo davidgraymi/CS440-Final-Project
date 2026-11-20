@@ -27,12 +27,14 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 NORM_EPS = 1e-5
+GAME_EMPTY = 1  # connect4.EMPTY token id
 
 
 @dataclass
@@ -49,6 +51,12 @@ class ModelConfig:
     n: int = 6  # latent (z) updates per recursion   (official: L_cycles)
     T: int = 3  # recursions per supervision step     (official: H_cycles)
     n_sup: int = 16  # max supervision steps           (official: halt_max_steps)
+    head: str = "tokens"  # "tokens": per-cell answer (puzzles); "game": Connect Four policy + value
+
+
+class GameOutput(NamedTuple):
+    policy: torch.Tensor  # (B, 7) column logits, illegal columns masked to a large negative
+    value: torch.Tensor  # (B, 3) logits for loss / draw / win (side to move)
 
 
 # ----------------------------------------------------------------- components
@@ -156,7 +164,12 @@ class _Base(nn.Module):
         # Learned prefix vector (official: zero-init "puzzle embedding" for the
         # single puzzle id). Occupies prefix position 0; the rest are zeros.
         self.prefix = nn.Parameter(torch.zeros(cfg.d_model))
-        self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
+        if cfg.head == "tokens":
+            self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
+        else:  # game: policy from each column's cells, value from prefix position 0
+            assert cfg.seq_len == 42 and cfg.n_prefix > 0
+            self.policy_head = nn.Linear(cfg.d_model, 1)
+            self.value_head = nn.Linear(cfg.d_model, 3)
 
     def embed_inputs(self, tokens):
         x = self.embed(tokens)
@@ -166,8 +179,15 @@ class _Base(nn.Module):
             x = torch.cat((pre, x), dim=1)
         return x * self.scale
 
-    def answer_logits(self, h):
-        return self.lm_head(h[:, self.cfg.n_prefix:])
+    def answer_logits(self, h, tokens):
+        board = h[:, self.cfg.n_prefix:]
+        if self.cfg.head == "tokens":
+            return self.lm_head(board)
+        B, _, D = board.shape
+        cols = board.reshape(B, 6, 7, D).mean(1)  # tokens are row-major, top row first
+        legal = tokens.view(B, 6, 7)[:, 0] == GAME_EMPTY  # top cell empty
+        policy = self.policy_head(cols).squeeze(-1).float().masked_fill(~legal, -1e9)
+        return GameOutput(policy, self.value_head(h[:, 0]).float())
 
 
 # ----------------------------------------------------------------------- TRM
@@ -207,7 +227,7 @@ class TRM(_Base):
                 y, z = self.latent_recursion(x, y, z)
         y, z = self.latent_recursion(x, y, z)
         q_halt = self.q_head(y[:, 0]).float().squeeze(-1)
-        return (y.detach(), z.detach()), self.answer_logits(y), q_halt
+        return (y.detach(), z.detach()), self.answer_logits(y, tokens), q_halt
 
     def effective_depth(self) -> int:
         """Layer applications per supervision step."""
@@ -231,7 +251,7 @@ class Direct(_Base):
         return None
 
     def step(self, tokens, carry):
-        return None, self.answer_logits(self.net(self.embed_inputs(tokens))), None
+        return None, self.answer_logits(self.net(self.embed_inputs(tokens)), tokens), None
 
     def effective_depth(self) -> int:
         return self.cfg.n_layers

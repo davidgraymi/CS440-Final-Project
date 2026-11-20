@@ -130,13 +130,21 @@ class RollingBatch:
         self.halted = halted
 
 
-def train_step(model, opt, sched, ema, batch: RollingBatch, args, autocast) -> dict:
+def puzzle_loss(logits, y, kind: str = "stablemax"):
+    """Per-example task loss and "answer fully correct" flags for puzzle tasks."""
+    return token_loss(logits, y, kind), (logits.argmax(-1) == y).all(-1)
+
+
+def train_step(model, opt, sched, ema, batch: RollingBatch, args, autocast, loss_fn=None) -> dict:
+    """One supervision step on every slot of the rolling batch, then one update.
+    `loss_fn(outputs, y) -> (per-example task loss, per-example correct)`;
+    the halting head is trained to predict `correct`."""
+    loss_fn = loss_fn or (lambda out, y: puzzle_loss(out, y, args.loss))
     batch.refill()
     with autocast:
-        batch.carry, logits, q = model.step(batch.x, batch.carry)
-        correct = (logits.argmax(-1) == batch.y).all(-1)
-        lm = token_loss(logits, batch.y, args.loss)
-        loss = lm
+        batch.carry, out, q = model.step(batch.x, batch.carry)
+        task, correct = loss_fn(out, batch.y)
+        loss = task
         if q is not None:
             loss = loss + 0.5 * F.binary_cross_entropy_with_logits(q, correct.float(), reduction="none")
         loss = loss.mean()
@@ -149,8 +157,8 @@ def train_step(model, opt, sched, ema, batch: RollingBatch, args, autocast) -> d
     ema.update_parameters(model)
     batch.advance(q)
     h = batch.halted
-    return dict(loss=loss.item(), lm=lm.mean().item(),
-                exact_at_halt=correct[h].float().mean().item() if h.any() else float("nan"),
+    return dict(loss=loss.item(), task=task.mean().item(),
+                correct_at_halt=correct[h].float().mean().item() if h.any() else float("nan"),
                 steps_at_halt=batch.steps[h].float().mean().item() if h.any() else float("nan"))
 
 

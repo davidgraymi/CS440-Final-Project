@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 import numpy as np
+import torch
 import pytest
 
 from cs440_final_project.connect4 import (
@@ -78,3 +79,52 @@ def test_depth_formula_examples():
     assert depth_from_score(18, 4) == 3
     # After "12121" the side to move loses immediately unless it blocks (score -18).
     assert depth_from_score(-18, 5) == 2
+
+
+def _fake_dataset(n: int, seed: int = 0) -> dict:
+    """Random positions with made-up labels (no solver needed)."""
+    from cs440_final_project.connect4 import label
+
+    rng = np.random.default_rng(seed)
+    moves = []
+    while len(moves) < n:
+        b = random_position(rng, int(rng.integers(0, 30)), safe=True)
+        if b is not None:
+            moves.append(b.move_string())
+    legal = np.stack([[board_from_moves(m).heights[c] < 6 for c in range(7)] for m in moves])
+    scores = np.where(legal, rng.integers(-5, 6, (n, 7)), -1000)
+    return label(moves, scores)
+
+
+def test_mirror_augmentation_is_consistent():
+    from cs440_final_project.c4_train import C4Dataset
+
+    d = _fake_dataset(50)
+    ds = C4Dataset(d, mirror=True)
+    for i in range(50):
+        for _ in range(4):
+            x, y = ds[i]
+            top = x.view(6, 7)[0]
+            assert torch.equal(y[7:14].bool(), top == EMPTY)  # legal mask matches mirrored board
+            assert y[:7][~y[7:14].bool()].sum() == 0  # optimal moves are legal
+
+
+def test_c4_train_and_eval_smoke(tmp_path, monkeypatch):
+    import cs440_final_project.c4_train as ct
+
+    d = _fake_dataset(200)
+    d["depth"] = np.random.default_rng(0).integers(1, 30, len(d["depth"])).astype(np.int16)
+    for split in ("train", "test"):
+        np.savez(tmp_path / f"c4_{split}.npz", **d)
+    monkeypatch.setattr(ct, "RUNS_DIR", tmp_path / "runs")
+    for model in ("trm", "direct"):
+        ct.train_main(["--model", model, "--data-prefix", str(tmp_path / "c4"), "--steps", "4",
+                       "--batch-size", "16", "--d-model", "32", "--n-heads", "4", "--n-sup", "3",
+                       "--eval-every", "2", "--eval-per-bucket", "5", "--workers", "0", "--device", "cpu",
+                       "--run-name", model])
+        ckpt = tmp_path / "runs" / model / "ckpt.pt"
+        assert ckpt.exists()
+        ct.eval_main(["--ckpt", str(ckpt), "--data-prefix", str(tmp_path / "c4"), "--per-bucket", "5",
+                      "--steps", "4" if model == "trm" else "1", "--device", "cpu",
+                      "--out", str(tmp_path / f"eval-{model}")])
+        assert (tmp_path / f"eval-{model}" / "summary.json").exists()

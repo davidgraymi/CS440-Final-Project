@@ -135,6 +135,22 @@ uv run c4-data --num 1000000 --test-per-bucket 2000     # ~12 min on an 8-core l
 
 The script samples unique, non-terminal positions by random play: 80% from "safe" random play, which blocks threats and never hands the opponent an immediate win, and 20% from uniform random play. Each position is labeled with the solver's exact score for every column. From those scores we derive the optimal moves, the game value and **d, the number of plies until the game ends under optimal play**. The formula for d is in `connect4.py`, and `tests/test_connect4.py` checks it against exhaustive search. The test set has the same number of positions in each depth bucket (1, 2, 3–4, 5–6, 7–8, 9–12, 13–16, 17–24, 25+, and draws). The output files are `data/c4_train.npz` and `data/c4_test.npz`.
 
+### Connect Four training and depth analysis
+
+```bash
+uv run c4-train --model trm --compile        # recursive thinking model
+uv run c4-train --model ds-only --compile    # ablation: deep supervision, no latent recursion
+uv run c4-train --model direct --compile     # one-pass transformer baseline
+uv run c4-eval --ckpt runs/<run>/ckpt.pt                 # all 20k test positions, trained step count
+uv run c4-eval --ckpt runs/<run>/ckpt.pt --steps 32      # think for longer than trained
+```
+
+The model sees the 42 cells from the side to move's point of view. It predicts a column, read from the 6 cells of each column, and the game value (loss, draw or win), read from a prefix token. The policy loss is the probability assigned to the set of optimal moves, so any optimal move counts as correct. The halting head learns to predict "my current move is optimal". Positions are randomly mirrored left-right during training.
+
+`c4-eval` records, for every test position and every supervision step, whether the chosen move is optimal. It writes `summary.json` and `move_acc_vs_steps_by_depth.png`, which give accuracy per depth bucket, the step at which each position is solved, and the learned halting step against depth.
+
+Defaults: d_model 512, batch 768, lr 2e-4, weight decay 0.1, 50k steps, MLP mixer. On an M3 laptop (MPS), a 1.25M-parameter model (`--d-model 256 --batch-size 256`) takes about 1.45 s per step. Use the laptop for short runs and the GPU server for full runs.
+
 ### Training (long run, on a GPU server)
 
 ```bash
