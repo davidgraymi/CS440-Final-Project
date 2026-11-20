@@ -6,9 +6,10 @@
 #   - CPU threads / workers leave RESERVE_CORES cores free
 #   - PyTorch's GPU memory is capped (MPS shares RAM with everything else)
 #   - a guard logs free memory and DNS latency every 30 s and stops the
-#     experiment if free memory drops below MIN_FREE_PCT, or if DNS fails or
-#     is slower than DNS_MAX_MS for DNS_BAD_LIMIT checks in a row
-#   - the run refuses to start if DNS is not healthy beforehand
+#     experiment if free memory drops below MIN_FREE_PCT
+#   - DNS is only logged by default; with DNS_STOP=1 the run also refuses to
+#     start on unhealthy DNS and stops after DNS_BAD_LIMIT checks in a row that
+#     fail or exceed DNS_MAX_MS
 #   - the Mac is kept awake (caffeinate) while it runs
 #
 # Schedule: build data if needed, then train TRM for most of the time left
@@ -20,8 +21,8 @@
 #   mkdir -p runs && nohup scripts/run_c4_experiment.sh > runs/c4-experiment.log 2>&1 &
 #
 # Overrides (environment): DEADLINE=07:00 RESERVE_CORES=2 MPS_MEM_RATIO=0.4
-#   MIN_FREE_PCT=25 DNS_SERVER=192.168.0.253 DNS_MAX_MS=300 DNS_BAD_LIMIT=3
-#   DATA_WORKERS=2 D_MODEL=256 BATCH=128 TAG=overnight
+#   MIN_FREE_PCT=25 DNS_SERVER=192.168.0.253 DNS_STOP=0 DNS_MAX_MS=300 DNS_BAD_LIMIT=3
+#   DATA_WORKERS=<cores - RESERVE_CORES> D_MODEL=256 BATCH=128 TAG=overnight
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,7 +37,8 @@ MIN_FREE=${MIN_FREE_PCT:-25}
 DNS_SERVER=${DNS_SERVER:-192.168.0.253}
 DNS_MAX_MS=${DNS_MAX_MS:-300}
 DNS_BAD_LIMIT=${DNS_BAD_LIMIT:-3}
-DATA_WORKERS=${DATA_WORKERS:-2}
+DATA_WORKERS=${DATA_WORKERS:-$USE}
+DNS_STOP=${DNS_STOP:-0}
 D_MODEL=${D_MODEL:-256}
 BATCH=${BATCH:-128}
 TAG=${TAG:-overnight}
@@ -67,13 +69,13 @@ stop_all() {
 
 pre=$(dns_ms)
 if [ -z "$pre" ] || [ "$pre" -gt "$DNS_MAX_MS" ]; then
-  echo "$(date) | DNS @$DNS_SERVER unhealthy before starting (${pre:-no answer}); not starting" | tee -a runs/c4-guard.log
-  exit 1
+  echo "$(date) | DNS @$DNS_SERVER unhealthy before starting (${pre:-no answer})" | tee -a runs/c4-guard.log
+  [ "$DNS_STOP" = 1 ] && exit 1
 fi
 
 guard() {
   set +e +o pipefail  # a failed probe must not kill the guard
-  echo "$(date +%T) | guard started (DNS @$DNS_SERVER ${pre} ms; stop on ${DNS_BAD_LIMIT}x >${DNS_MAX_MS} ms or fail, or < ${MIN_FREE}% free)" >> runs/c4-guard.log
+  echo "$(date +%T) | guard started (stop below ${MIN_FREE}% free; DNS @$DNS_SERVER logged, stop on DNS: $DNS_STOP)" >> runs/c4-guard.log
   bad=0
   while sleep 30; do
     free=$(memory_pressure 2>/dev/null | awk -F': ' '/free percentage/ {gsub("%", "", $2); print $2}')
@@ -81,7 +83,7 @@ guard() {
     if [ -z "$dns" ] || [ "$dns" -gt "$DNS_MAX_MS" ]; then bad=$((bad + 1)); else bad=0; fi
     echo "$(date +%T) | mem free ${free:-?}% | dns ${dns:-FAIL} ms | bad ${bad}/${DNS_BAD_LIMIT}" >> runs/c4-guard.log
     if [ -n "$free" ] && [ "$free" -lt "$MIN_FREE" ]; then stop_all "memory free ${free}% < ${MIN_FREE}%"; fi
-    if [ "$bad" -ge "$DNS_BAD_LIMIT" ]; then stop_all "DNS slow or failing ${bad} checks in a row"; fi
+    if [ "$DNS_STOP" = 1 ] && [ "$bad" -ge "$DNS_BAD_LIMIT" ]; then stop_all "DNS slow or failing ${bad} checks in a row"; fi
   done
 }
 guard &
