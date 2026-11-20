@@ -1,10 +1,5 @@
 # CS440-Final-Project
 
-
-
-
-
-
 ## Topics
 
 1. Searchless models
@@ -17,3 +12,8 @@ Artificial intelligence has transitioned from hand crafted algorithms and heuris
 ## References
 
 * https://github.com/autogluon/tabarena
+* https://github.com/google-deepmind/disco_rl
+* https://github.com/facebookresearch/coconut
+* https://github.com/samsungsailmontreal/tinyrecursivemodels
+* https://github.com/machinestein/Deep-Improvement-Supervision
+* https://arxiv.org/pdf/2605.11262
