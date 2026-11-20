@@ -48,18 +48,24 @@ BUCKET_NAMES = [f"{lo}" if lo == hi else f"{lo}-{hi}" for lo, hi in DEPTH_BUCKET
 # ---------------------------------------------------------------------- data
 
 
+NEEDED = ("tokens", "optimal", "legal", "value", "depth", "n_moves")
+
+
 def load(path) -> dict:
-    return dict(np.load(path))
+    """Only the arrays training/eval use (skips e.g. ~160 MB of move strings)."""
+    with np.load(path) as f:
+        return {k: f[k] for k in NEEDED}
 
 
 def pack_targets(d: dict) -> np.ndarray:
-    """(N, 15) int64: optimal mask (7), legal mask (7), value class (0 loss, 1 draw, 2 win)."""
-    return np.concatenate([d["optimal"], d["legal"], (d["value"] + 1)[:, None]], axis=1).astype(np.int64)
+    """(N, 15) uint8: optimal mask (7), legal mask (7), value class (0 loss, 1 draw, 2 win).
+    Kept as uint8 (each DataLoader worker holds a copy); converted per batch."""
+    return np.concatenate([d["optimal"], d["legal"], (d["value"] + 1)[:, None]], axis=1).astype(np.uint8)
 
 
 class C4Dataset(Dataset):
     def __init__(self, d: dict, mirror: bool):
-        self.x = d["tokens"].astype(np.int64)
+        self.x = np.ascontiguousarray(d["tokens"], dtype=np.uint8)
         self.y = pack_targets(d)
         self.mirror = mirror
         self.rng = np.random.default_rng()
@@ -72,7 +78,7 @@ class C4Dataset(Dataset):
         if self.mirror and self.rng.random() < 0.5:
             x = x.reshape(6, 7)[:, ::-1].reshape(-1)
             y = np.concatenate([y[6::-1], y[13:6:-1], y[14:]])
-        return torch.from_numpy(x.copy()), torch.from_numpy(y.copy())
+        return torch.from_numpy(x.astype(np.int64)), torch.from_numpy(y.astype(np.int64))
 
 
 def worker_init(worker_id: int):
@@ -103,7 +109,7 @@ def run_eval(model, d: dict, device, batch_size: int, steps: int | None = None, 
     value_ok = np.zeros((N, steps), bool)
     qs = np.full((N, steps), np.nan, np.float32)
     x_all = torch.from_numpy(d["tokens"].astype(np.int64))
-    y_all = torch.from_numpy(pack_targets(d))
+    y_all = torch.from_numpy(pack_targets(d).astype(np.int64))
     t0 = time.time()
     for i in range(0, N, batch_size):
         x, y = x_all[i:i + batch_size].to(device), y_all[i:i + batch_size].to(device)
