@@ -114,13 +114,17 @@ def build_main(argv=None):
 # ------------------------------------------------------------------- assembly
 
 
-def canonical_keys(boards: list[Board]) -> np.ndarray:
-    """Stable 64-bit hash of the smaller of each board and its mirror image."""
-    keys = []
-    for b in boards:
-        g, m = b.grid.tobytes(), np.ascontiguousarray(np.fliplr(b.grid)).tobytes()
-        keys.append(int.from_bytes(hashlib.blake2b(min(g, m), digest_size=8).digest(), "little", signed=True))
-    return np.array(keys, dtype=np.int64)
+def canonical_keys(tokens: np.ndarray) -> np.ndarray:
+    """Stable 64-bit hash of the smaller of each position and its mirror image, from the
+    (N, 42) side-to-move tokens. Equal boards have equal piece counts, hence the same
+    side to move, so tokens identify boards exactly."""
+    t = np.ascontiguousarray(tokens.reshape(-1, 6, 7))
+    m = np.ascontiguousarray(t[:, :, ::-1])
+    keys = np.empty(len(t), dtype=np.int64)
+    for i in range(len(t)):
+        a, b = t[i].tobytes(), m[i].tobytes()
+        keys[i] = int.from_bytes(hashlib.blake2b(min(a, b), digest_size=8).digest(), "little", signed=True)
+    return keys
 
 
 def _subset(d: dict, idx: np.ndarray) -> dict:
@@ -152,18 +156,22 @@ def assemble_main(argv=None):
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args(argv)
 
+    # Label one shard at a time: label() builds a Python Board per position, so labelling
+    # everything at once would need several GB on a machine that also serves DNS.
     files = sorted(Path(args.shards).glob("shard_*[0-9].npz"))
-    parts = [np.load(f) for f in files]
-    moves = np.concatenate([z["moves"] for z in parts])
-    scores = np.concatenate([z["scores"] for z in parts])
-    game = np.concatenate([z["game"] for z in parts])
-    eps = np.concatenate([z["eps"] for z in parts])
+    chunks = []
+    for i, f in enumerate(files):
+        with np.load(f) as z:
+            part = label(list(z["moves"]), z["scores"])
+            part.update(game=z["game"], eps=z["eps"])
+        part["canon"] = canonical_keys(part["tokens"])
+        chunks.append(part)
+        if (i + 1) % 50 == 0:
+            print(f"labelled {i + 1}/{len(files)} shards", flush=True)
+    d = {k: np.concatenate([c[k] for c in chunks]) for k in chunks[0]}
+    del chunks
+    moves, game = d["moves"], d["game"]
     print(f"{len(files)} shards, {len(moves)} positions, {len(np.unique(game))} games", flush=True)
-
-    d = label(list(moves), scores)
-    d.update(game=game, eps=eps)
-    boards = [board_from_moves(m) for m in moves]
-    d["canon"] = canonical_keys(boards)
 
     # Split by game; dedupe within each split; drop train positions whose canonical form is in test.
     rng = np.random.default_rng(args.seed)

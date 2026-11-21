@@ -99,6 +99,36 @@ r and d differ for about half the positions in bucket 2–4 and for 8–12% of t
 
 **Revision to 3.1.** A depth-4 alpha-beta engine in Python would be slower than the solver itself. Python sampling of safe-random play already runs at only about 80 positions/s per worker. Instead, generate **near-optimal games with the solver**: at every ply, play a random optimal move with probability 1 − ε, else a random safe move, and **keep every position along the game** with its scores. Each solve then produces a dataset position, at no extra cost. Mix: 50% near-optimal trajectories (ε ∈ {0.1, 0.3}), 50% safe-random. Split by game, not by position, since positions in one game are correlated. Budget: about 2.5M solved positions at about 100/s, roughly 7 hours.
 
+### 3.6 Stage 1–2 results (2026-11-20)
+
+Built on this machine in 5 h 50 min with 2 background workers. Over 2,059 guard checks, DNS failures were 2.1% (AdGuard baseline 2.9%), never 2 in a row, and free memory stayed at 58% or more.
+
+| | |
+|---|---|
+| Solved positions | 2,507,251 from 87,776 games (eps 0.1 / 0.3 / 1.0 = 25 / 25 / 50% of games) |
+| Train (`data/c4v2_train.npz`) | 1,683,332 after dedupe and removal of 40,424 test-equivalent positions |
+| Test pool | 329,208 positions from 13,166 held-out games |
+| Tactical set (`data/c4v2_tactical.npz`) | 12,991: 500 per (r bucket, stage) cell; 26 of 27 cells full (r ≥ 17 doesn't occur at plies 27–36) |
+| General set (`data/c4v2_general.npz`) | 10,000, balanced by d |
+| Overlap with train | 0 canonical positions, 0 games |
+| r vs. ply correlation (tactical) | −0.23, down from −0.63 for d in the pilot test set |
+
+**Baselines on the tactical set** (`results/c4v2-baselines/`):
+
+| r | n | Chance | Win/block shortcut | Search k=1 | k=2 | k=4 | k=8 | k=12 | k=16 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 1,491 | 0.20 | **1.00** | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 2 | 1,500 | 0.21 | **1.00** | 0.21 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 3–4 | 1,500 | 0.20 | 0.22 | 0.20 | 0.22 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 5–6 | 1,500 | 0.21 | 0.23 | 0.21 | 0.23 | 0.26 | 1.00 | 1.00 | 1.00 |
+| 7–8 | 1,500 | 0.20 | 0.22 | 0.20 | 0.22 | 0.24 | 1.00 | 1.00 | 1.00 |
+| 9–10 | 1,500 | 0.19 | 0.20 | 0.19 | 0.20 | 0.22 | 0.25 | 1.00 | 1.00 |
+| 11–12 | 1,500 | 0.18 | 0.20 | 0.18 | 0.19 | 0.22 | 0.24 | 1.00 | 1.00 |
+| 13–16 | 1,500 | 0.17 | 0.18 | 0.17 | 0.18 | 0.20 | 0.22 | 0.24 | 1.00 |
+| ≥ 17 | 1,000 | 0.15 | 0.16 | 0.15 | 0.16 | 0.17 | 0.18 | 0.19 | 0.21 |
+
+Validity checks 6.4 pass: search steps from chance to 1.0 exactly at k = r, and the shortcut solves only r ≤ 2, staying within 2 points of chance for r ≥ 3.
+
 ## 4. Models
 
 All models: MLP mixer, d_model 256, about 1.25M parameters unless stated. Same input encoding and heads (policy over the optimal set, value).
