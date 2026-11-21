@@ -210,7 +210,11 @@ It's **partially supported** if 1 holds but 2 or 3 doesn't. It's **not supported
 | 4 | TRM-small seed 1, ds-only, Direct-4/8/16/32, linear-weight ablation | About 3–4 days total | One at a time |
 | 5 | Final CPU evaluations, analysis, plots, write-up | About 1 day | Guarded |
 
-**Go/no-go after Stage 3 at 30k steps:** if accuracy by step on the tactical set is flat in *K* for every *r* bucket, stop before spending days on baselines. Revisit step size (smaller steps) or the data first.
+**Stage 3 notes (2026-11-21).** With 32 supervision steps and no halting, each position stays in the batch for 32 consecutive updates, so only 4 new positions enter per update (batch 128). Training accuracy at the final step therefore reads about 100% (the position has been trained on 31 times). That isn't a measure of generalization. At step 8,000 (32k distinct positions), held-out accuracy at K=32 was 49% on train positions, 52% on the general set and 31% on the tactical set. Chance is about 38%, 38% and 19%. Tactical accuracy will lag general accuracy for a long time, so early stopping on the tactical slice would stop the run too soon. It is turned off (`PATIENCE=0`), and the cosine schedule runs to 150k steps (600k positions, about 10 h).
+
+**Revised go/no-go: at 60k steps (240k positions), not 30k.** r = 1 and r = 2 (win now, must block) must be clearly learned, above 60% at K = 32, before deeper buckets can mean anything. If they aren't, per-example learning is too slow for this setup (revisit n_sup 16, d_model 512 or batch size) before running the baselines.
+
+**Original go/no-go after Stage 3 at 30k steps:** if accuracy by step on the tactical set is flat in *K* for every *r* bucket, stop before spending days on baselines. Revisit step size (smaller steps) or the data first.
 
 ## 8. Code changes needed
 
