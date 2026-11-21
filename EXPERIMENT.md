@@ -214,6 +214,12 @@ It's **partially supported** if 1 holds but 2 or 3 doesn't. It's **not supported
 
 **Revised go/no-go: at 60k steps (240k positions), not 30k.** r = 1 and r = 2 (win now, must block) must be clearly learned, above 60% at K = 32, before deeper buckets can mean anything. If they aren't, per-example learning is too slow for this setup (revisit n_sup 16, d_model 512 or batch size) before running the baselines.
 
+**Diagnostics during Stage 3 (2026-11-21, 01:00–02:30).** Tactical accuracy sat at 30–33% and win-in-one at about 40% from 32k to 104k positions seen, so I checked for a bug or bad data:
+- Data checks: tokens match move strings, labels match solver scores, every r=1 position's labelled move wins at once.
+- The pilot small-step model (v1 data, 550k positions) scores 70% on the v2 tactical set: 98% on r=1, 94% on r=2, then 81% (r 3–4) falling to about 55% from r=5 on. So the set is learnable (`results/c4v2-pilot-model/`).
+- Same config (T=1, n=2, n_sup 16), 4,000 steps, trained on v1 vs. v2 data: tactical 33.7% vs. 36.6%, r=1 54% vs. 40%, r=2 36% vs. 47%. So the data isn't the problem.
+- Conclusion: no bug. These tactics are learned slowly early in training for every setup. The main run resumed unchanged, and the 60k-step go/no-go stands.
+
 **Original go/no-go after Stage 3 at 30k steps:** if accuracy by step on the tactical set is flat in *K* for every *r* bucket, stop before spending days on baselines. Revisit step size (smaller steps) or the data first.
 
 ## 8. Code changes needed
