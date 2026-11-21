@@ -2,7 +2,7 @@
 
 Handoff notes for picking this project up in a new session. Background, hypothesis and benchmark design are in `README.md`; this file covers what has been done, what we found, and what comes next.
 
-Branch: `trm-sanity-check` (all work so far). Last updated 2026-11-20 (after the sweep).
+Branch: `c4-small-step-run` (off `main`). Last updated 2026-11-21 (after the Stage 3 go/no-go).
 
 ## Status at a glance
 
@@ -14,7 +14,35 @@ Branch: `trm-sanity-check` (all work so far). Last updated 2026-11-20 (after the
 | Connect Four training and evaluation | Done | `c4_train.py` (`c4-train`, `c4-eval`, `c4-sweep`) |
 | Overnight pilot: TRM vs. ds-only vs. direct | Done | `results/c4-overnight/` (committed from the server) |
 | Test-time recursion sweep on the overnight TRM | Done (2026-11-20): flat beyond the trained setting | `results/c4-sweep/` |
-| Small-step long run (step 2) | **Next**; not started | see Next steps |
+| Small-step long run (step 2) | Done: 83.2%; extra steps add ~1 point, not depth-dependent | `results/c4-smallstep/` |
+| EXPERIMENT.md Stage 0: r label, search baseline, solver probe | Done | `results/stage0/`, `tests/test_connect4.py` |
+| Stage 1: v2 dataset (2.5M solved positions, tactical set by r) | Done (committed) | `data/c4v2_*`, `c4data.py` |
+| Stage 2: search and shortcut baselines on the tactical set | Done | `results/c4v2-baselines/` |
+| Stage 3: TRM-small seed 0, n_sup 32 | **No-go at 60k steps**; stopped, resumable | `results/c4v2-trm-small-s0/` |
+
+## Write-up: where things stand (2026-11-21)
+
+**Question.** Does a weight-tied recursive model (TRM) use more thinking steps on Connect Four positions that need deeper lookahead?
+
+**What we built.**
+- A label for *required search depth* r: the smallest lookahead that proves the best move is better than every alternative. It is checked against a brute-force search in the tests.
+- A new dataset of 2.5M solver-labelled positions from solver-played games, split by game with no position overlap. From its test games, a **tactical set** of 12,991 positions has a unique winning move, balanced by r and game stage, so r is only weakly tied to move number (correlation −0.23, down from −0.63).
+- Baselines on the tactical set: a depth-k search goes from chance to 100% exactly at k = r, and a "win now, else block" rule solves only r ≤ 2. The set measures lookahead, as intended.
+- A guarded, resumable training and data-build setup that runs at background priority beside AdGuard DNS. Over about 12 hours of solver and GPU work, DNS failures stayed at or below AdGuard's own baseline (2.9%), and free memory never fell below 48%.
+
+**What we found.**
+1. Pilot TRMs answer in their first supervision step. Extra steps and extra test-time recursion change accuracy by about 1 point, the same at every depth (`results/c4-sweep/`, `results/c4-smallstep/`).
+2. On the tactical set, the best pilot model scores 98% at r=1, 94% at r=2, 81% at r=3–4 and about 55% from r=5 on. Accuracy is flat in the number of steps for every r (`results/c4v2-pilot-model/`).
+3. The pre-registered run (T=1, n=1, 32 steps, every example runs all 32) learned too slowly. At 60k steps it reached 40% on r=1 and 50% on r=2, below the 60% go/no-go bar, and later steps often undid correct step-1 answers. Diagnostics found no bug and no data problem.
+
+**So far, there is no evidence for the hypothesis.** The models that learn well do it in one step, and the setup built to force multi-step use doesn't learn fast enough on this hardware.
+
+**Next (to decide).**
+- A: warm-start the pre-registered run from the pilot model, about 8 h.
+- B: from scratch with 16 steps, about 24 h.
+- C: write up the current evidence as a negative result.
+
+Details and every number: [EXPERIMENT.md](EXPERIMENT.md), sections 3.5–3.6 and 7.
 
 ## Results so far
 
