@@ -217,3 +217,87 @@ def assemble_main(argv=None):
     print("tactical cells (available / taken):")
     for k, v in cells.items():
         print(f"  {k:>18}: {v['available']:6d} / {v['taken']}")
+
+
+# ------------------------------------------------------------------ baselines
+
+
+def _wins_at(b: Board, c: int, player: int) -> bool:
+    """Would `player` connect four by dropping a piece in column c?"""
+    r, g = b.heights[c], b.grid
+    for dr, dc in ((0, 1), (1, 0), (1, 1), (1, -1)):
+        count = 1
+        for sgn in (1, -1):
+            rr, cc = r + sgn * dr, c + sgn * dc
+            while 0 <= rr < 6 and 0 <= cc < W and g[rr, cc] == player:
+                count += 1
+                rr, cc = rr + sgn * dr, cc + sgn * dc
+        if count >= 4:
+            return True
+    return False
+
+
+def shortcut_accuracy(moves: str, optimal: np.ndarray) -> float:
+    """Expected accuracy of 'win now, else block, else a random move that doesn't
+    hand the opponent a win, else any random move'."""
+    from .connect4 import opponent_can_win_after
+    b = board_from_moves(moves)
+    legal, me = b.legal(), b.to_move
+    choice = ([c for c in legal if _wins_at(b, c, me)]
+              or [c for c in legal if _wins_at(b, c, 3 - me)]
+              or [c for c in legal if not opponent_can_win_after(b, c)]
+              or legal)
+    return sum(bool(optimal[c]) for c in choice) / len(choice)
+
+
+def baselines_main(argv=None):
+    """Stage 2: search and shortcut baselines on the tactical set, by r bucket and game stage."""
+    from .connect4 import search_baseline_accuracy
+    p = argparse.ArgumentParser(description=baselines_main.__doc__)
+    p.add_argument("--data", default=str(ROOT / "data" / "c4v2_tactical.npz"))
+    p.add_argument("--out", default="results/c4v2-baselines")
+    p.add_argument("--max-k", type=int, default=20)
+    args = p.parse_args(argv)
+    with np.load(args.data) as f:
+        d = {k: f[k] for k in f.files}
+    n, r, sc, opt, legal = d["n_moves"], d["req_depth"], d["scores"], d["optimal"], d["legal"]
+    ks = list(range(1, args.max_k + 1))
+    search = np.array([[search_baseline_accuracy(s, int(m), k) for k in ks] for s, m in zip(sc, n)])
+    shortcut = np.array([shortcut_accuracy(str(m), o) for m, o in zip(d["moves"], opt)])
+    chance = opt.sum(1) / legal.sum(1)
+    rb, st = bucket(r, R_BUCKETS), stage_of(n)
+    rows = []
+    for i, (lo, hi) in enumerate(R_BUCKETS):
+        for j in range(-1, len(STAGES)):
+            m = (rb == i) & ((st == j) if j >= 0 else True)
+            if not m.any():
+                continue
+            rows.append(dict(r=f"{lo}-{hi}", stage="all" if j < 0 else f"{STAGES[j][0]}-{STAGES[j][1]}",
+                             n=int(m.sum()), chance=round(float(chance[m].mean()), 4),
+                             shortcut=round(float(shortcut[m].mean()), 4),
+                             search_by_k=[round(float(v), 4) for v in search[m].mean(0)]))
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "baselines.json").write_text(json.dumps(dict(data=args.data, ks=ks, rows=rows), indent=2))
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(7.5, 4.8))
+    allrows = [x for x in rows if x["stage"] == "all"]
+    colors = plt.cm.viridis(np.linspace(0, 0.9, len(allrows)))
+    for x, c in zip(allrows, colors):
+        ax.plot(ks, x["search_by_k"], marker="o", ms=2.5, color=c, label=f"r={x['r']} (n={x['n']})")
+    ax.set_xlabel("search depth k (plies), no evaluation function")
+    ax.set_ylabel("optimal-move accuracy")
+    ax.set_title("Reference: depth-limited search on the tactical set, by required depth r")
+    ax.set_ylim(0, 1.02)
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=7, ncol=2, loc="lower right")
+    fig.tight_layout()
+    fig.savefig(out / "search_by_depth.png", dpi=150)
+    print(f"{'r':>6} {'n':>5} {'chance':>7} {'shortcut':>9}  search k=1,2,4,8,12,16")
+    for x in allrows:
+        s = x["search_by_k"]
+        print(f"{x['r']:>6} {x['n']:5d} {x['chance']:7.3f} {x['shortcut']:9.3f}  "
+              + " ".join(f"{s[k - 1]:.2f}" for k in (1, 2, 4, 8, 12, 16)))

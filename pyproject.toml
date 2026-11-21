@@ -24,6 +24,7 @@ c4-eval = "cs440_final_project.c4_train:eval_main"
 c4-sweep = "cs440_final_project.c4_train:sweep_main"
 c4-build-data = "cs440_final_project.c4data:build_main"
 c4-assemble = "cs440_final_project.c4data:assemble_main"
+c4-baselines = "cs440_final_project.c4data:baselines_main"
 
 [build-system]
 requires = ["uv_build>=0.13.9,<0.14.0"]

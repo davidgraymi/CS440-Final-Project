@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
 from contextlib import nullcontext
 from dataclasses import asdict
@@ -49,12 +50,13 @@ BUCKET_NAMES = [f"{lo}" if lo == hi else f"{lo}-{hi}" for lo, hi in DEPTH_BUCKET
 
 
 NEEDED = ("tokens", "optimal", "legal", "value", "depth", "n_moves")
+OPTIONAL = ("req_depth",)  # v2 data (c4data.py)
 
 
 def load(path) -> dict:
     """Only the arrays training/eval use (skips e.g. ~160 MB of move strings)."""
     with np.load(path) as f:
-        return {k: f[k] for k in NEEDED}
+        return {k: f[k] for k in NEEDED + OPTIONAL if k in f}
 
 
 def pack_targets(d: dict) -> np.ndarray:
@@ -125,6 +127,20 @@ def run_eval(model, d: dict, device, batch_size: int, steps: int | None = None, 
                   f"{time.time() - t0:.0f}s", flush=True)
     model.train(was_training)
     return move_ok, value_ok, qs
+
+
+def r_breakdown(move_ok: np.ndarray, d: dict) -> dict:
+    """Accuracy by supervision step for each required-search-depth bucket (v2 data only)."""
+    if "req_depth" not in d:
+        return {}
+    from .c4data import R_BUCKETS
+    r = d["req_depth"]
+    out = {}
+    for lo, hi in R_BUCKETS:
+        m = (r >= lo) & (r <= hi)
+        if m.any():
+            out[f"r{lo}-{hi}"] = [round(float(v), 3) for v in move_ok[m].mean(0)]
+    return dict(move_acc_by_step_by_r=out)
 
 
 def analyze(path: Path) -> dict:
@@ -243,6 +259,12 @@ def train_args(argv=None):
     p.add_argument("--eval-every", type=int, default=5000)
     p.add_argument("--eval-per-bucket", type=int, default=500, help="test positions per depth bucket (0: all)")
     p.add_argument("--eval-batch-size", type=int, default=1024)
+    p.add_argument("--eval-split", default="test",
+                   help="eval file {data-prefix}_{split}.npz; 'test' (v1) is balanced by depth, others are sliced")
+    p.add_argument("--eval-limit", type=int, default=2000, help="positions in the eval slice (non-'test' splits)")
+    p.add_argument("--lr-schedule", choices=["constant", "cosine"], default="constant",
+                   help="after warmup: constant, or cosine decay to --min-lr-frac of lr at --steps")
+    p.add_argument("--min-lr-frac", type=float, default=0.1)
     p.add_argument("--device", default="auto")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--seed", type=int, default=0)
@@ -278,13 +300,24 @@ def train_main(argv=None):
     train = load(f"{args.data_prefix}_train.npz")
     if args.train_limit:
         train = {k: v[:args.train_limit] if isinstance(v, np.ndarray) and v.ndim else v for k, v in train.items()}
-    test = balanced_subset(load(f"{args.data_prefix}_test.npz"), args.eval_per_bucket)
+    if args.eval_split == "test":  # v1 data: balanced by depth bucket
+        test = balanced_subset(load(f"{args.data_prefix}_test.npz"), args.eval_per_bucket)
+    else:  # v2 data (c4data.py): a fixed random slice of e.g. the tactical set
+        test = load(f"{args.data_prefix}_{args.eval_split}.npz")
+        idx = np.sort(np.random.default_rng(0).permutation(len(test["tokens"]))[:args.eval_limit])
+        test = {k: v[idx] for k, v in test.items()}
     loader = DataLoader(C4Dataset(train, args.mirror), args.batch_size, shuffle=True, drop_last=True,
                         num_workers=args.workers, worker_init_fn=worker_init,
                         persistent_workers=args.workers > 0, pin_memory=device.type == "cuda")
     batch = RollingBatch(model, ExampleStream(loader, device), args.batch_size, args.halt_explore, args.halt)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.95))
-    sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1.0, (s + 1) / max(1, args.warmup)))
+    def lr_factor(s):
+        warm = min(1.0, (s + 1) / max(1, args.warmup))
+        if args.lr_schedule == "constant":
+            return warm
+        frac = min(1.0, max(0.0, (s - args.warmup) / max(1, args.steps - args.warmup)))
+        return warm * (args.min_lr_frac + (1 - args.min_lr_frac) * 0.5 * (1 + math.cos(math.pi * frac)))
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_factor)
     loss_fn = lambda out, y: game_loss(out, y, args.value_weight)  # noqa: E731
 
     run_name = args.run_name or f"c4-{args.model}-{time.strftime('%Y%m%d-%H%M%S')}"
@@ -362,7 +395,8 @@ def train_main(argv=None):
                     best=round(best, 4), evals_without_improvement=bad_evals,
                     move_acc_by_step=[round(float(v), 4) for v in move_ok.mean(0)],
                     move_acc_by_depth={n: round(float(move_ok[b == k, -1].mean()), 4)
-                                       for k, n in enumerate(BUCKET_NAMES) if (b == k).any()})))
+                                       for k, n in enumerate(BUCKET_NAMES) if (b == k).any()},
+                    **r_breakdown(move_ok, test))))
                 save(step)
                 if improved:
                     save(step, run_dir / "best.pt")
