@@ -220,6 +220,8 @@ It's **partially supported** if 1 holds but 2 or 3 doesn't. It's **not supported
 - Same config (T=1, n=2, n_sup 16), 4,000 steps, trained on v1 vs. v2 data: tactical 33.7% vs. 36.6%, r=1 54% vs. 40%, r=2 36% vs. 47%. So the data isn't the problem.
 - Conclusion: no bug. These tactics are learned slowly early in training for every setup. The main run resumed unchanged, and the 60k-step go/no-go stands.
 
+**Go/no-go at 60k steps (2026-11-21 04:37): NO-GO.** After 240k positions, at K=32 on the tactical slice: r=1 40%, r=2 50% (the bar was 60%); overall 36.6% (best 37.4%). From about 40k steps on, step 1 often beats step 32 on r=1 (for example 49% vs. 42% at 46k), so later steps tend to undo correct early answers. The run is stopped (resumable at step 60,074); logs are in `results/c4v2-trm-small-s0/`. DNS over the run: 2.0% failed probes (1,353 checks), never 2 in a row; free memory ≥ 48%.
+
 **Original go/no-go after Stage 3 at 30k steps:** if accuracy by step on the tactical set is flat in *K* for every *r* bucket, stop before spending days on baselines. Revisit step size (smaller steps) or the data first.
 
 ## 8. Code changes needed
