@@ -255,7 +255,7 @@ def _run_job(spec: dict) -> dict:
         # The project's venv first on PATH, so `python`, `c4-train` etc. are this repo's.
         env = os.environ | {"C4_JOB_ID": spec["id"], "C4_WATCH_PID": str(os.getpid()),
                             "PATH": f"{repo / '.venv/bin'}{os.pathsep}{os.environ.get('PATH', '')}"}
-        proc = subprocess.Popen(argv, cwd=repo, stdout=log, stderr=subprocess.STDOUT,
+        proc = subprocess.Popen(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                                 env=env, start_new_session=True)
         try:
             # Poll rather than block: ray.cancel delivers KeyboardInterrupt between
