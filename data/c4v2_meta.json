@@ -1,0 +1,139 @@
+{
+  "shards": 500,
+  "positions": 2507251,
+  "games": 87776,
+  "test_games": 13166,
+  "train": 1683332,
+  "test_pool": 329208,
+  "train_removed_as_test_duplicates": 40424,
+  "tactical": 12991,
+  "general": 10000,
+  "tactical_cells": {
+    "r1-1|ply6-16": {
+      "available": 491,
+      "taken": 491
+    },
+    "r1-1|ply17-26": {
+      "available": 4462,
+      "taken": 500
+    },
+    "r1-1|ply27-36": {
+      "available": 13916,
+      "taken": 500
+    },
+    "r2-2|ply6-16": {
+      "available": 4027,
+      "taken": 500
+    },
+    "r2-2|ply17-26": {
+      "available": 7477,
+      "taken": 500
+    },
+    "r2-2|ply27-36": {
+      "available": 7454,
+      "taken": 500
+    },
+    "r3-4|ply6-16": {
+      "available": 2728,
+      "taken": 500
+    },
+    "r3-4|ply17-26": {
+      "available": 6019,
+      "taken": 500
+    },
+    "r3-4|ply27-36": {
+      "available": 5100,
+      "taken": 500
+    },
+    "r5-6|ply6-16": {
+      "available": 1092,
+      "taken": 500
+    },
+    "r5-6|ply17-26": {
+      "available": 2332,
+      "taken": 500
+    },
+    "r5-6|ply27-36": {
+      "available": 2499,
+      "taken": 500
+    },
+    "r7-8|ply6-16": {
+      "available": 1088,
+      "taken": 500
+    },
+    "r7-8|ply17-26": {
+      "available": 1466,
+      "taken": 500
+    },
+    "r7-8|ply27-36": {
+      "available": 1834,
+      "taken": 500
+    },
+    "r9-10|ply6-16": {
+      "available": 860,
+      "taken": 500
+    },
+    "r9-10|ply17-26": {
+      "available": 1123,
+      "taken": 500
+    },
+    "r9-10|ply27-36": {
+      "available": 1225,
+      "taken": 500
+    },
+    "r11-12|ply6-16": {
+      "available": 773,
+      "taken": 500
+    },
+    "r11-12|ply17-26": {
+      "available": 1226,
+      "taken": 500
+    },
+    "r11-12|ply27-36": {
+      "available": 898,
+      "taken": 500
+    },
+    "r13-16|ply6-16": {
+      "available": 1105,
+      "taken": 500
+    },
+    "r13-16|ply17-26": {
+      "available": 3476,
+      "taken": 500
+    },
+    "r13-16|ply27-36": {
+      "available": 570,
+      "taken": 500
+    },
+    "r17-42|ply6-16": {
+      "available": 20435,
+      "taken": 500
+    },
+    "r17-42|ply17-26": {
+      "available": 5571,
+      "taken": 500
+    },
+    "r17-42|ply27-36": {
+      "available": 0,
+      "taken": 0
+    }
+  },
+  "eps_mix": [
+    [
+      0.1,
+      0.25
+    ],
+    [
+      0.3,
+      0.25
+    ],
+    [
+      1.0,
+      0.5
+    ]
+  ],
+  "plies": [
+    6,
+    36
+  ]
+}

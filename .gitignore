@@ -228,3 +228,7 @@ runs/
 third_party/
 !data/c4_train.npz
 !data/c4_test.npz
+!data/c4v2_train.npz
+!data/c4v2_tactical.npz
+!data/c4v2_general.npz
+!data/c4v2_meta.json

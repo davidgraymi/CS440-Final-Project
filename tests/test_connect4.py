@@ -6,6 +6,7 @@ import pytest
 
 from cs440_final_project.connect4 import (
     EMPTY, OPP, OWN, SOLVER_DIR, Board, board_from_moves, depth_from_score, label, random_position,
+    search_baseline_accuracy,
 )
 
 
@@ -72,6 +73,82 @@ def test_depth_formula_matches_brute_force():
     for b, v, d in zip(boards, data["value"], data["depth"]):
         assert brute_force(b.move_string()) == (v, d), b.move_string()
     assert len(set(data["value"].tolist())) > 1  # sample covers more than one outcome
+
+
+def search_required_depth(moves: str) -> int:
+    """Brute-force r: the smallest k at which a depth-k search with no evaluation
+    function is guaranteed to pick an optimal (fastest-winning) move. The search
+    plays the moves it proves win at the smallest depth; if it proves none, it
+    picks among the moves it cannot prove lose, and must be right whichever it picks."""
+
+    @lru_cache(maxsize=None)
+    def outcome(ms: str, k: int) -> int:
+        """+1: side to move forces a win within k plies; -1: it loses within k plies
+        whatever it plays; 0: not decided within k plies."""
+        if k <= 0:
+            return 0
+        b = board_from_moves(ms)
+        legal = b.legal()
+        if not legal:
+            return 0
+        if any(b.is_winning_move(c) for c in legal):
+            return 1
+        results = [-outcome(ms + str(c + 1), k - 1) for c in legal]
+        if 1 in results:
+            return 1
+        return -1 if all(r == -1 for r in results) else 0
+
+    def move_outcome(c: int, k: int) -> int:
+        b = board_from_moves(moves)
+        if b.is_winning_move(c):
+            return 1 if k >= 1 else 0
+        return -outcome(moves + str(c + 1), k - 1)
+
+    b = board_from_moves(moves)
+    legal = b.legal()
+    exact = {c: brute_force(moves + str(c + 1)) if not b.is_winning_move(c) else (-1, 0) for c in legal}
+    # Exact outcome of each move for the side to move: (value, plies to end including this move).
+    exact = {c: (-v, d + 1) for c, (v, d) in exact.items()}
+    best = max(exact.values(), key=lambda vd: (vd[0], -vd[1] if vd[0] == 1 else vd[1]))
+    optimal = {c for c, vd in exact.items() if vd == best}
+    if optimal == set(legal):
+        return 0
+    for k in range(1, 43):
+        for j in range(1, k + 1):  # iterative deepening: fastest proven win first
+            won = {c for c in legal if move_outcome(c, j) == 1}
+            if won:
+                break
+        picks = won or {c for c in legal if move_outcome(c, k) != -1}
+        if picks and picks <= optimal:
+            return k
+    raise AssertionError("no depth identifies an optimal move")
+
+
+@pytest.mark.skipif(not (SOLVER_DIR / "c4solver").exists(), reason="solver not installed")
+def test_required_depth_matches_search():
+    from cs440_final_project.connect4 import Solver
+
+    rng = np.random.default_rng(1)
+    boards = []
+    while len(boards) < 120:
+        b = random_position(rng, int(rng.integers(30, 37)), safe=True)
+        if b is not None:
+            boards.append(b)
+    solver = Solver()
+    ms = [b.move_string() for b in boards]
+    data = label(ms, solver.analyze(ms))
+    solver.close()
+    won = [(m, r, d, s, n) for m, r, d, v, s, n in zip(ms, data["req_depth"], data["depth"], data["value"],
+                                                      data["scores"], data["n_moves"]) if v == 1]
+    assert len(won) >= 20
+    for m, r, d, s, n in won:
+        assert search_required_depth(m) == r, (m, r, d)
+        # The analytic search baseline is certain to be right exactly from depth r on.
+        for k in range(1, 15):
+            assert (search_baseline_accuracy(s, int(n), k) == 1.0) == (k >= r), (m, r, k)
+    won = [(m, r, d) for m, r, d, *_ in won]
+    # The label must actually separate r from d on some positions.
+    assert any(r < d for _, r, d in won)
 
 
 def test_depth_formula_examples():

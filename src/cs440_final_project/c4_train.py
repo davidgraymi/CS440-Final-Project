@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
 from contextlib import nullcontext
 from dataclasses import asdict
@@ -49,12 +50,13 @@ BUCKET_NAMES = [f"{lo}" if lo == hi else f"{lo}-{hi}" for lo, hi in DEPTH_BUCKET
 
 
 NEEDED = ("tokens", "optimal", "legal", "value", "depth", "n_moves")
+OPTIONAL = ("req_depth", "scores")  # v2 data (c4data.py)
 
 
 def load(path) -> dict:
     """Only the arrays training/eval use (skips e.g. ~160 MB of move strings)."""
     with np.load(path) as f:
-        return {k: f[k] for k in NEEDED}
+        return {k: f[k] for k in NEEDED + OPTIONAL if k in f}
 
 
 def pack_targets(d: dict) -> np.ndarray:
@@ -125,6 +127,20 @@ def run_eval(model, d: dict, device, batch_size: int, steps: int | None = None, 
                   f"{time.time() - t0:.0f}s", flush=True)
     model.train(was_training)
     return move_ok, value_ok, qs
+
+
+def r_breakdown(move_ok: np.ndarray, d: dict) -> dict:
+    """Accuracy by supervision step for each required-search-depth bucket (v2 data only)."""
+    if "req_depth" not in d:
+        return {}
+    from .c4data import R_BUCKETS
+    r = d["req_depth"]
+    out = {}
+    for lo, hi in R_BUCKETS:
+        m = (r >= lo) & (r <= hi)
+        if m.any():
+            out[f"r{lo}-{hi}"] = [round(float(v), 3) for v in move_ok[m].mean(0)]
+    return dict(move_acc_by_step_by_r=out)
 
 
 def analyze(path: Path) -> dict:
@@ -234,6 +250,8 @@ def train_args(argv=None):
     p.add_argument("--halt-explore", type=float, default=0.1)
     p.add_argument("--no-halt", dest="halt", action="store_false",
                    help="always run all n_sup steps in training (halting head is still trained)")
+    p.add_argument("--step-weight", choices=["uniform", "linear", "final"], default="uniform",
+                   help="task-loss weight by supervision step; linear/final push the model to use later steps")
     p.add_argument("--value-weight", type=float, default=0.5)
     p.add_argument("--no-mirror", dest="mirror", action="store_false")
     p.add_argument("--dtype", choices=["auto", "bf16", "fp32"], default="auto", help="auto: bf16 on CUDA, else fp32")
@@ -241,10 +259,21 @@ def train_args(argv=None):
     p.add_argument("--eval-every", type=int, default=5000)
     p.add_argument("--eval-per-bucket", type=int, default=500, help="test positions per depth bucket (0: all)")
     p.add_argument("--eval-batch-size", type=int, default=1024)
+    p.add_argument("--eval-split", default="test",
+                   help="eval file {data-prefix}_{split}.npz; 'test' (v1) is balanced by depth, others are sliced")
+    p.add_argument("--eval-limit", type=int, default=2000, help="positions in the eval slice (non-'test' splits)")
+    p.add_argument("--lr-schedule", choices=["constant", "cosine"], default="constant",
+                   help="after warmup: constant, or cosine decay to --min-lr-frac of lr at --steps")
+    p.add_argument("--min-lr-frac", type=float, default=0.1)
     p.add_argument("--device", default="auto")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--train-limit", type=int, default=0, help="use only the first N training positions (smoke tests)")
+    p.add_argument("--resume", action="store_true",
+                   help="continue from runs/<run-name>/ckpt.pt (model, EMA, optimizer, schedule, step) if it exists")
+    p.add_argument("--patience", type=int, default=0,
+                   help="stop after this many evals in a row without beating the best move accuracy by --min-delta (0: off)")
+    p.add_argument("--min-delta", type=float, default=0.002)
     # Keeps train.train_step's puzzle-only options defined.
     p.set_defaults(loss="stablemax")
     return p.parse_args(argv)
@@ -271,13 +300,24 @@ def train_main(argv=None):
     train = load(f"{args.data_prefix}_train.npz")
     if args.train_limit:
         train = {k: v[:args.train_limit] if isinstance(v, np.ndarray) and v.ndim else v for k, v in train.items()}
-    test = balanced_subset(load(f"{args.data_prefix}_test.npz"), args.eval_per_bucket)
+    if args.eval_split == "test":  # v1 data: balanced by depth bucket
+        test = balanced_subset(load(f"{args.data_prefix}_test.npz"), args.eval_per_bucket)
+    else:  # v2 data (c4data.py): a fixed random slice of e.g. the tactical set
+        test = load(f"{args.data_prefix}_{args.eval_split}.npz")
+        idx = np.sort(np.random.default_rng(0).permutation(len(test["tokens"]))[:args.eval_limit])
+        test = {k: v[idx] for k, v in test.items()}
     loader = DataLoader(C4Dataset(train, args.mirror), args.batch_size, shuffle=True, drop_last=True,
                         num_workers=args.workers, worker_init_fn=worker_init,
                         persistent_workers=args.workers > 0, pin_memory=device.type == "cuda")
     batch = RollingBatch(model, ExampleStream(loader, device), args.batch_size, args.halt_explore, args.halt)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.95))
-    sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1.0, (s + 1) / max(1, args.warmup)))
+    def lr_factor(s):
+        warm = min(1.0, (s + 1) / max(1, args.warmup))
+        if args.lr_schedule == "constant":
+            return warm
+        frac = min(1.0, max(0.0, (s - args.warmup) / max(1, args.steps - args.warmup)))
+        return warm * (args.min_lr_frac + (1 - args.min_lr_frac) * 0.5 * (1 + math.cos(math.pi * frac)))
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_factor)
     loss_fn = lambda out, y: game_loss(out, y, args.value_weight)  # noqa: E731
 
     run_name = args.run_name or f"c4-{args.model}-{time.strftime('%Y%m%d-%H%M%S')}"
@@ -290,14 +330,47 @@ def train_main(argv=None):
     print(f"{run_name}: {kind} {n_params / 1e6:.2f}M params, depth/step {model.effective_depth()}, "
           f"n_sup {model.n_sup}, train {len(train['tokens'])}, device {device}, bf16 {use_bf16}", flush=True)
 
+    # Resume: restore weights, EMA, optimizer and LR schedule, and continue the step count.
+    start, best, bad_evals = 0, -1.0, 0
+    ckpt_path = run_dir / "ckpt.pt"
+    if args.resume and ckpt_path.exists():
+        ck = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+        model.load_state_dict(ck["model"])
+        ema.module.load_state_dict(ck["ema"])
+        if "opt" in ck:
+            opt.load_state_dict(ck["opt"])
+            sched.load_state_dict(ck["sched"])
+            if "n_averaged" in ck:
+                ema.n_averaged.fill_(ck["n_averaged"])
+        start, best, bad_evals = ck["step"], ck.get("best", -1.0), ck.get("bad_evals", 0)
+        torch.manual_seed(args.seed + start)  # new data order after a resume
+        print(f"resumed from {ckpt_path} at step {start} (best move acc {best:.4f})", flush=True)
+
+    def save(step, path=ckpt_path):
+        tmp = path.with_suffix(".tmp")
+        torch.save(dict(model=model.state_dict(), ema=ema.module.state_dict(), cfg=asdict(cfg), kind=kind,
+                        step=step, opt=opt.state_dict(), sched=sched.state_dict(),
+                        n_averaged=int(ema.n_averaged.item()), best=best, bad_evals=bad_evals), tmp)
+        tmp.replace(path)  # atomic: a kill mid-save never leaves a broken checkpoint
+
+    # SIGTERM/SIGINT (e.g. from the DNS/memory guard): finish the current step, save, exit.
+    import signal
+    stop_signal = []
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda s, f: stop_signal.append(s))
+
     with open(run_dir / "log.jsonl", "a") as log:
         def emit(rec):
             print(json.dumps(rec), flush=True)
             log.write(json.dumps(rec) + "\n")
             log.flush()
 
-        t0, window = time.time(), []
-        for step in range(1, args.steps + 1):
+        t0, window, step = time.time(), [], start
+        for step in range(start + 1, args.steps + 1):
+            if stop_signal:
+                save(step - 1)
+                emit(dict(step=step - 1, stopped=f"signal {stop_signal[0]}", resumable=True))
+                return
             window.append(train_step(model, opt, sched, ema, batch, args, autocast, loss_fn))
             if step % 100 == 0:
                 emit(dict(step=step, sec=round(time.time() - t0, 1),
@@ -307,15 +380,30 @@ def train_main(argv=None):
             if step % args.eval_every == 0 or step == args.steps or out_of_time:
                 with autocast:
                     move_ok, value_ok, _ = run_eval(ema.module, test, device, args.eval_batch_size)
+                if device.type == "mps":
+                    torch.mps.empty_cache()
                 b = bucket_of(test["depth"], test["value"])
+                acc = float(move_ok[:, -1].mean())
+                improved = acc > best + args.min_delta
+                if improved:
+                    best, bad_evals = acc, 0
+                else:
+                    bad_evals += 1
                 emit(dict(step=step, eval=dict(
-                    move_acc=round(float(move_ok[:, -1].mean()), 4),
+                    move_acc=round(acc, 4),
                     value_acc=round(float(value_ok[:, -1].mean()), 4),
+                    best=round(best, 4), evals_without_improvement=bad_evals,
                     move_acc_by_step=[round(float(v), 4) for v in move_ok.mean(0)],
                     move_acc_by_depth={n: round(float(move_ok[b == k, -1].mean()), 4)
-                                       for k, n in enumerate(BUCKET_NAMES) if (b == k).any()})))
-                torch.save(dict(model=model.state_dict(), ema=ema.module.state_dict(), cfg=asdict(cfg),
-                                kind=kind, step=step), run_dir / "ckpt.pt")
+                                       for k, n in enumerate(BUCKET_NAMES) if (b == k).any()},
+                    **r_breakdown(move_ok, test))))
+                save(step)
+                if improved:
+                    save(step, run_dir / "best.pt")
+                if args.patience and bad_evals >= args.patience:
+                    emit(dict(step=step, stopped=f"no improvement > {args.min_delta} in {bad_evals} evals",
+                              best=round(best, 4)))
+                    break
             if out_of_time:
                 emit(dict(step=step, stopped="time limit", minutes=round((time.time() - t0) / 60, 1)))
                 break
@@ -415,6 +503,8 @@ def sweep_main(argv=None):
                        sec=round(time.time() - t0, 1))
             rows.append(row)
             print(json.dumps(row), flush=True)
+            if device.type == "mps":  # don't let cached blocks pile up across settings
+                torch.mps.empty_cache()
     model.cfg.T, model.cfg.n = trained
     result = dict(ckpt=args.ckpt, trained_T=trained[0], trained_n=trained[1], n_layers=model.cfg.n_layers, n_positions=len(buckets), rows=rows)
     (out_dir / "sweep.json").write_text(json.dumps(result, indent=2))
