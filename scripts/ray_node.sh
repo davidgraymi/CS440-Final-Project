@@ -33,7 +33,7 @@ export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1  # Ray refuses multi-node clusters on
 export RAY_USAGE_STATS_ENABLED=0
 export C4_REPO=$(pwd)               # job processes inherit this: where to run and write results
 
-common=(--num-cpus "${NUM_CPUS:-2}" --include-dashboard=false --disable-usage-stats
+common=(--num-cpus "${NUM_CPUS:-2}" --disable-usage-stats
         --object-store-memory $(( ${OBJ_STORE_MB:-300} * 1000000 )))
 [ -n "${NODE_IP:-}" ] && common+=(--node-ip-address "$NODE_IP")
 
@@ -49,7 +49,7 @@ case "${1:-}" in
   head)
     export C4_GUARD_DNS=${C4_GUARD_DNS:-1}
     [ -s "$HOME/.ray/auth_token" ] || "$RAY" get-auth-token --generate >/dev/null
-    nice -n 10 "$RAY" start --head --port "$PORT" "${common[@]}" \
+    nice -n 10 "$RAY" start --head --port "$PORT" --include-dashboard=false "${common[@]}" \
       --resources "{\"mps\": $SLOTS, \"c4_head\": 1}"
     echo
     echo "head up with $SLOTS job slot(s). On the MacBook: scripts/ray_node.sh join $(hostname -s).local"
