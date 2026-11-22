@@ -50,7 +50,7 @@ BUCKET_NAMES = [f"{lo}" if lo == hi else f"{lo}-{hi}" for lo, hi in DEPTH_BUCKET
 
 
 NEEDED = ("tokens", "optimal", "legal", "value", "depth", "n_moves")
-OPTIONAL = ("req_depth",)  # v2 data (c4data.py)
+OPTIONAL = ("req_depth", "scores")  # v2 data (c4data.py)
 
 
 def load(path) -> dict:

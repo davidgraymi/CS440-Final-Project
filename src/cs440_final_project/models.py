@@ -51,7 +51,11 @@ class ModelConfig:
     n: int = 6  # latent (z) updates per recursion   (official: L_cycles)
     T: int = 3  # recursions per supervision step     (official: H_cycles)
     n_sup: int = 16  # max supervision steps           (official: halt_max_steps)
-    head: str = "tokens"  # "tokens": per-cell answer (puzzles); "game": Connect Four policy + value
+    head: str = "tokens"  # "tokens": per-cell answer (puzzles); "game": Connect Four policy + value;
+    #                       "game_cols": game + per-column outcome classes (c4_ponder.py)
+
+
+N_COL_CLASSES = 9  # loss (4 distance buckets), draw, win (4 distance buckets); see c4_ponder.col_classes
 
 
 class GameOutput(NamedTuple):
@@ -170,6 +174,8 @@ class _Base(nn.Module):
             assert cfg.seq_len == 42 and cfg.n_prefix > 0
             self.policy_head = nn.Linear(cfg.d_model, 1)
             self.value_head = nn.Linear(cfg.d_model, 3)
+            if cfg.head == "game_cols":  # also: outcome class of playing each column (c4_ponder.py)
+                self.col_head = nn.Linear(cfg.d_model, N_COL_CLASSES)
 
     def embed_inputs(self, tokens):
         x = self.embed(tokens)
@@ -178,6 +184,12 @@ class _Base(nn.Module):
             pre[:, 0] = self.prefix
             x = torch.cat((pre, x), dim=1)
         return x * self.scale
+
+    def column_logits(self, h):
+        """(B, 7, N_COL_CLASSES): outcome class of playing each column, from that column's cells."""
+        B, _, D = h.shape
+        cols = h[:, self.cfg.n_prefix:].reshape(B, 6, 7, D).mean(1)
+        return self.col_head(cols).float()
 
     def answer_logits(self, h, tokens):
         board = h[:, self.cfg.n_prefix:]

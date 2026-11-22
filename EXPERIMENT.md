@@ -51,7 +51,7 @@ From the per-column scores (no extra solving):
 
 ### 3.3 Evaluation sets
 
-1. **Tactical set (primary):** positions where the side to move wins, has **exactly one winning move**, and has *r* in {1, 3, 5, 7, 9, 11, 13, ≥15}.
+1. **Tactical set (primary):** positions where the side to move wins, has **exactly one optimal (fastest) winning move**, and has *r* in {1, 3, 5, 7, 9, 11, 13, ≥15}. (Correction, 2026-11-21: the built set requires one *optimal* move, not one *winning* move. 54% of its positions have other, slower winning columns. For those, r is the full length of the win, since telling the fastest win from slower ones means seeing to the end. The search baseline uses the same definition, so the results in 3.6 are consistent with it.)
    - 1,500 positions per *r* bucket, 12,000 in all.
    - Within each bucket, equal numbers from three game stages (plies 6–16, 17–26, 27–36) where possible. Counts per cell are reported, so stage can be controlled in the analysis.
    - Chance accuracy is 1/(legal moves), about 15–20%.

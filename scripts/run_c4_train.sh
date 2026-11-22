@@ -23,7 +23,7 @@
 # Usage (from the repo root):
 #   nohup scripts/run_c4_train.sh > runs/c4-train-smallstep.log 2>&1 &
 # Overrides: RUN_NAME=c4-trm-smallstep T=1 N=2 D_MODEL=256 BATCH=128 STEPS=1000000
-#   EVAL_EVERY=2000 PATIENCE=10 TIME_LIMIT_MIN=0 EXTRA_ARGS= MPS_MEM_RATIO=0.3
+#   EVAL_EVERY=2000 PATIENCE=10 TIME_LIMIT_MIN=0 EXTRA_ARGS= MPS_MEM_RATIO=0.3 TRAINER=c4|ponder
 #   MIN_FREE_PCT=25 LOW_MEM_MINUTES=3 HARD_MIN_FREE_PCT=15 DNS_SERVER=192.168.0.253 DNS_MAX_MS=200 DNS_FAIL_LIMIT=3
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -64,11 +64,19 @@ fi
 QOS=(taskpolicy -b); [ "${QOS_BG:-1}" = 0 ] && QOS=()
 # Call train_main directly (works even if the venv's console scripts are stale).
 # nice and taskpolicy exec the command, so $! is the trainer itself.
+# TRAINER=ponder runs c4_ponder.py (outer-loop thinking, EXPERIMENT-OUTER-LOOP.md) instead of c4_train.py.
 # shellcheck disable=SC2086
-nice -n 19 "${QOS[@]}" .venv/bin/python -c "import sys; from cs440_final_project.c4_train import train_main; train_main(sys.argv[2:])" \
-    c4-train --model trm --T "$T" --n "$N" --no-halt --d-model "$D_MODEL" --batch-size "$BATCH" \
-    --steps "$STEPS" --eval-every "$EVAL_EVERY" --eval-batch-size 128 --patience "$PATIENCE" \
-    --time-limit-min "$TIME_LIMIT_MIN" --workers 2 --device mps --run-name "$RUN_NAME" --resume $EXTRA_ARGS &
+if [ "${TRAINER:-c4}" = ponder ]; then
+  nice -n 19 "${QOS[@]}" .venv/bin/python -c "import sys; from cs440_final_project.c4_ponder import train_main; train_main(sys.argv[2:])" \
+      c4-ponder --T "$T" --n "$N" --d-model "$D_MODEL" --batch-size "$BATCH" --steps "$STEPS" \
+      --eval-every "$EVAL_EVERY" --time-limit-min "$TIME_LIMIT_MIN" --workers 2 --device mps \
+      --run-name "$RUN_NAME" --resume $EXTRA_ARGS &
+else
+  nice -n 19 "${QOS[@]}" .venv/bin/python -c "import sys; from cs440_final_project.c4_train import train_main; train_main(sys.argv[2:])" \
+      c4-train --model trm --T "$T" --n "$N" --no-halt --d-model "$D_MODEL" --batch-size "$BATCH" \
+      --steps "$STEPS" --eval-every "$EVAL_EVERY" --eval-batch-size 128 --patience "$PATIENCE" \
+      --time-limit-min "$TIME_LIMIT_MIN" --workers 2 --device mps --run-name "$RUN_NAME" --resume $EXTRA_ARGS &
+fi
 JOB=$!
 caffeinate -i -w $JOB &
 
@@ -80,7 +88,7 @@ stop() {
     echo "$(date +%T) | trainer still running after 20 s: SIGKILL" | tee -a "$GLOG"
     pkill -KILL -P $JOB 2>/dev/null; kill -KILL $JOB 2>/dev/null
   fi
-  echo "$(date +%T) | stopped; resume with: RUN_NAME=$RUN_NAME scripts/run_c4_train.sh" | tee -a "$GLOG"
+  echo "$(date +%T) | stopped; resume by rerunning the same command (RUN_NAME=$RUN_NAME)" | tee -a "$GLOG"
   exit 2
 }
 
