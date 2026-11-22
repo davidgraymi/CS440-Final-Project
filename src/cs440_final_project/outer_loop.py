@@ -87,9 +87,14 @@ class Driver:
             status = {j["id"]: j for j in self.jq.ray.get(self.queue.status.remote())}
             pending = 0
             for name, cmd, evals in jobs:
+                st = self.state.get(name, {})
                 if self.done(name, evals):
+                    if st.get("id") and not st.get("reported"):
+                        node = status.get(st["id"], {}).get("node")
+                        log(f"{name}: done{f' on {node}' if node else ''}")
+                        st["reported"] = True
+                        self.save()
                     continue
-                st = self.state[name]
                 if st.get("gave_up"):
                     continue
                 if st.get("retry_at"):
