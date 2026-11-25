@@ -1,0 +1,129 @@
+{
+  "ckpt": "runs/c4p-fixed-k1/ckpt.pt",
+  "step": 22000,
+  "n": 12991,
+  "acc_at_stop": 0.818,
+  "acc_by_step": [
+    0.818
+  ],
+  "mean_stop": 1.0,
+  "mean_exp_steps": 1.0,
+  "col_acc_by_step": [
+    0.6815
+  ],
+  "by_r": {
+    "1-1": {
+      "n": 1491,
+      "acc_at_stop": 0.9953,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.9953
+      ]
+    },
+    "2-2": {
+      "n": 1500,
+      "acc_at_stop": 0.996,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.996
+      ]
+    },
+    "3-4": {
+      "n": 1500,
+      "acc_at_stop": 0.95,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.95
+      ]
+    },
+    "5-6": {
+      "n": 1500,
+      "acc_at_stop": 0.8013,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.8013
+      ]
+    },
+    "7-8": {
+      "n": 1500,
+      "acc_at_stop": 0.7707,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.7707
+      ]
+    },
+    "9-10": {
+      "n": 1500,
+      "acc_at_stop": 0.7347,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.7347
+      ]
+    },
+    "11-12": {
+      "n": 1500,
+      "acc_at_stop": 0.7153,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.7153
+      ]
+    },
+    "13-16": {
+      "n": 1500,
+      "acc_at_stop": 0.7,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.7
+      ]
+    },
+    "17-42": {
+      "n": 1000,
+      "acc_at_stop": 0.641,
+      "mean_stop": 1.0,
+      "mean_exp_steps": 1.0,
+      "acc_by_step": [
+        0.641
+      ]
+    }
+  },
+  "spearman_stop_vs_r_by_stage": {
+    "6-16": {
+      "n": 4491,
+      "rho_exp_steps": NaN,
+      "rho_stop": NaN,
+      "ci95": [
+        NaN,
+        NaN
+      ],
+      "rho_shuffled_r": NaN
+    },
+    "17-26": {
+      "n": 4500,
+      "rho_exp_steps": NaN,
+      "rho_stop": NaN,
+      "ci95": [
+        NaN,
+        NaN
+      ],
+      "rho_shuffled_r": NaN
+    },
+    "27-36": {
+      "n": 4000,
+      "rho_exp_steps": NaN,
+      "rho_stop": NaN,
+      "ci95": [
+        NaN,
+        NaN
+      ],
+      "rho_shuffled_r": NaN
+    }
+  }
+}
