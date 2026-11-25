@@ -1,0 +1,350 @@
+<title>Model Tournament</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (~760px) of findings, each followed by its figure; split toggle sticks at top. */
+:root{
+  --bg:#f7f8fa; --surface:#ffffff; --fg:#14171c; --fg2:#4d5562; --muted:#7a8391; --rule:#dfe3e9; --grid:#eceff3;
+  --accent:#2a78d6; --good:#127a3e; --bad:#b3261e; --chip:#e9eef6;
+  --s-D0:#2a78d6; --s-D1:#6250d6; --s-C:#1baf7a; --s-A:#e87ba4; --s-k24:#eb6834; --s-k8:#e34948; --s-k4:#eda100; --s-k1:#008300;
+  --h0:#f1f5fb; --h1:#cde2fb; --h2:#9ec5f4; --h3:#6da7ec; --h4:#3987e5; --h5:#256abf; --h6:#184f95; --h7:#0d366b;
+  --display:"Space Grotesk",system-ui,sans-serif; --body:"Inter",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121417; --surface:#1a1d21; --fg:#eef0f3; --fg2:#b9c0ca; --muted:#8a93a0; --rule:#2c3137; --grid:#24282d;
+  --accent:#3987e5; --good:#4cc27a; --bad:#ef6b62; --chip:#232a34;
+  --s-D0:#3987e5; --s-D1:#9085e9; --s-C:#199e70; --s-A:#d55181; --s-k24:#d95926; --s-k8:#e66767; --s-k4:#c98500; --s-k1:#0ca30c;
+  --h0:#1d2228; --h1:#17304f; --h2:#184f95; --h3:#1c5cab; --h4:#256abf; --h5:#3987e5; --h6:#6da7ec; --h7:#b7d3f6; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121417; --surface:#1a1d21; --fg:#eef0f3; --fg2:#b9c0ca; --muted:#8a93a0; --rule:#2c3137; --grid:#24282d;
+  --accent:#3987e5; --good:#4cc27a; --bad:#ef6b62; --chip:#232a34;
+  --s-D0:#3987e5; --s-D1:#9085e9; --s-C:#199e70; --s-A:#d55181; --s-k24:#d95926; --s-k8:#e66767; --s-k4:#c98500; --s-k1:#0ca30c;
+  --h0:#1d2228; --h1:#17304f; --h2:#184f95; --h3:#1c5cab; --h4:#256abf; --h5:#3987e5; --h6:#6da7ec; --h7:#b7d3f6; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:820px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:36px 72px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;letter-spacing:-.01em;margin:0}
+h1{font-size:34px;line-height:1.15}
+h2{font-size:22px;margin-top:8px}
+h3{font-size:15px}
+p{margin:0;max-width:68ch;color:var(--fg)}
+.lede{color:var(--fg2);font-size:16px;margin-top:10px}
+.eyebrow{font:500 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+section{display:grid;gap:14px;margin-top:44px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:10px 0;border-bottom:1px solid var(--rule);margin-top:22px}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{font:500 13px var(--body);border:0;background:transparent;color:var(--fg2);padding:6px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.seg button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bar .note{font-size:12.5px;color:var(--muted)}
+.findings{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.findings li{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:baseline}
+.findings .tag{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:5px;background:var(--chip);color:var(--fg2);white-space:nowrap}
+.findings .tag.yes{color:var(--good)} .findings .tag.no{color:var(--bad)}
+figure{margin:0;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px 16px 12px;display:grid;gap:10px;min-width:0}
+figcaption{font-size:13px;color:var(--fg2);max-width:72ch}
+.chart{position:relative;min-width:0}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font:11px var(--body);fill:var(--fg2)}
+.chart .axis-label{fill:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--fg2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:18px;height:0;border-top:2px solid}
+.legend i.dash{border-top-style:dashed}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgb(0 0 0 / .12);min-width:150px;z-index:3}
+.tip b{font-family:var(--display);font-weight:600}
+.tip .row{display:flex;justify-content:space-between;gap:12px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tip .row span:first-child{display:inline-flex;align-items:center;gap:6px;font-family:var(--body)}
+.tip .sw{width:8px;height:8px;border-radius:2px;display:inline-block}
+.multi{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.multi h3{font-size:13px;color:var(--fg2);font-weight:500;margin-bottom:4px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+th{font:500 11.5px var(--body);color:var(--muted);text-align:right}
+th:first-child,td:first-child{text-align:left}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.best{font-weight:600;color:var(--fg)}
+td .ci{color:var(--muted);font-size:11.5px}
+.pos{color:var(--good)} .neg{color:var(--bad)} .ns{color:var(--muted)}
+.swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:0}
+.callout{border-left:3px solid var(--accent);padding:4px 0 4px 14px;color:var(--fg2)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:12px 14px;display:grid;gap:4px}
+.kpi .v{font:600 24px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12.5px;color:var(--fg2)}
+select{font:13px var(--body);background:var(--surface);color:var(--fg);border:1px solid var(--rule);border-radius:6px;padding:4px 8px}
+.heat{display:grid;gap:2px;font-size:11px;min-width:560px}
+.heat .r{display:grid;grid-template-columns:96px repeat(24,1fr) 56px;gap:2px;align-items:center}
+.heat .c{height:20px;border-radius:2px}
+.heat .lab{color:var(--fg2);font-family:var(--mono)}
+.heat .ms{text-align:right;font-family:var(--mono);color:var(--fg2)}
+.heat .hd{color:var(--muted);text-align:center;font-family:var(--mono)}
+.scale{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.scale .ramp{display:flex;gap:2px}.scale .ramp i{width:18px;height:10px;border-radius:2px}
+details{font-size:13.5px;color:var(--fg2)} summary{cursor:pointer;color:var(--fg)}
+ul.plain{margin:6px 0 0;padding-left:18px;display:grid;gap:6px}
+footer{margin-top:48px;font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+:root{--d-4:#b6461b;--d-3:#e0733f;--d-2:#f2a27c;--d-1:#f9d3bf;--d0:#eceef1;--d1:#cde2fb;--d2:#9ec5f4;--d3:#5598e7;--d4:#1c5cab;--on-strong:#ffffff;--res-w:#2a78d6;--res-d:#b5bcc6;--res-l:#eb6834}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--d-4:#e27a4b;--d-3:#b4532a;--d-2:#7d3a1f;--d-1:#4a2a1d;--d0:#272b31;--d1:#1a3352;--d2:#1c4c86;--d3:#2a6ec0;--d4:#5598e7;--on-strong:#ffffff;--res-w:#3987e5;--res-d:#59616c;--res-l:#d95926}}
+:root[data-theme="dark"]{--d-4:#e27a4b;--d-3:#b4532a;--d-2:#7d3a1f;--d-1:#4a2a1d;--d0:#272b31;--d1:#1a3352;--d2:#1c4c86;--d3:#2a6ec0;--d4:#5598e7;--on-strong:#ffffff;--res-w:#3987e5;--res-d:#59616c;--res-l:#d95926}
+.mx{display:grid;gap:2px;min-width:600px;position:relative}
+.mr{display:grid;grid-template-columns:150px repeat(9,minmax(44px,1fr));gap:2px;align-items:center}
+.mc{height:34px;display:flex;align-items:center;justify-content:center;border-radius:3px;font:500 12.5px var(--mono);font-variant-numeric:tabular-nums;cursor:default}
+.mc:focus-visible{outline:2px solid var(--fg);outline-offset:1px}
+.mc.self{color:var(--muted);background:transparent}
+.mh{font-size:11px;color:var(--muted);text-align:center;line-height:1.2}
+.ml{font-size:12.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+figure{position:relative}
+code{font:12.5px var(--mono)}
+</style>
+<div class="wrap">
+  <div class="eyebrow">Connect Four · round-robin · 9 players · 101,880 games</div>
+  <h1 style="margin-top:10px">Model tournament</h1>
+  <p class="lede">Every model played every other model, and a perfect solver player, from each of 1,415 distinct opening positions 0–4 moves deep, once with each side moving first. Models always play their top move, so the openings are what make the games differ.</p>
+
+  <section>
+    <h2>What the games show</h2>
+    <ul class="findings" id="findings"></ul>
+  </section>
+
+  <section>
+    <div class="eyebrow">Figure 1</div>
+    <h2>Ratings</h2>
+    <p>Bradley–Terry ratings on the Elo scale, fitted to all games with draws counted as half a win, centred at 1500. Whiskers are 95% intervals from resampling the openings 300 times.</p>
+    <figure>
+      <div class="chart" id="elo"></div>
+      <figcaption id="capElo"></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">Figure 2</div>
+    <h2>Head to head</h2>
+    <p>Each cell is the row player's score against the column player over 2,830 games: wins plus half of draws. Blue means the row player came out ahead, orange behind. Hover a cell for wins, draws and losses.</p>
+    <figure>
+      <div class="tbl"><div class="mx" id="mx"></div></div>
+      <div class="scale"><span>row behind</span><span class="ramp" id="divRamp"></span><span>row ahead</span></div>
+      <figcaption id="capMx"></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">Figure 3</div>
+    <h2>Against perfect play</h2>
+    <p>Games against the solver, grouped by what the opening is worth for the model's side with perfect play. The solver never loses a won position or a drawn one, so these bars measure how much of the position's value each model keeps. All models lost every game from a lost opening, as they must.</p>
+    <figure>
+      <div class="legend" id="lgPerf"></div>
+      <div class="multi">
+        <div><h3>Openings the model should win (<span id="nWin"></span> per model)</h3><div class="chart" id="perfWin"></div></div>
+        <div><h3>Openings the model should draw (<span id="nDraw"></span> per model)</h3><div class="chart" id="perfDraw"></div></div>
+      </div>
+      <figcaption id="capPerf"></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">Figure 4</div>
+    <h2>Outer steps per move during play</h2>
+    <p>Mean number of outer steps the adaptive models used per move, by how many pieces were on the board before the move. Fixed controls always use their set number.</p>
+    <figure>
+      <div class="legend" id="lgSteps"></div>
+      <div class="chart" id="steps"></div>
+      <figcaption id="capSteps"></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">Table 1</div>
+    <h2>Score by opening depth</h2>
+    <p>Average score against all eight opponents from openings of each depth. Depth 0 is the empty board: one opening, so 16 games per player, all of them repeats of the same two games per pairing.</p>
+    <figure>
+      <div class="tbl"><table id="depthTbl"></table></div>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">Table 2</div>
+    <h2>Standings</h2>
+    <figure>
+      <div class="tbl"><table id="stand"></table></div>
+      <figcaption>Score is wins plus half of draws over all 22,640 games each player played. Mean outer steps is per move during these games.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Method</h2>
+    <details open>
+      <summary>How the tournament was run</summary>
+      <ul class="plain">
+        <li>Openings: every distinct board reachable in 0–4 plies (1 + 7 + 49 + 238 + 1,120 = 1,415). Boards reached by different move orders count once.</li>
+        <li>Each of the 36 pairings played every opening twice, with each player moving first once: 2,830 games per pairing.</li>
+        <li>Adaptive models answer at their own stopping step (cumulative stop probability ≥ 0.5, up to 24 steps). Fixed controls answer at their last step. Illegal moves are masked, so none occurred.</li>
+        <li>The perfect player is Pascal Pons's Connect Four solver with its opening book; among equally good moves it picks the one nearest the centre.</li>
+        <li>Opening values come from the same solver: of the 1,415 openings, <span id="ov"></span> for the side to move.</li>
+        <li>Run on both Macs through the Ray queue as eight shards; source is <code>src/cs440_final_project/c4_tournament.py</code>, raw games in <code>results/c4p/tournament/shard-*/games.jsonl</code>.</li>
+      </ul>
+    </details>
+  </section>
+  <footer>Generated 25 Nov 2026 from 101,880 games.</footer>
+</div>
+
+<script>
+const D = {"players":["perfect","D0","D1","C","A","k24","k8","k4","k1"],"n_games":101880,"n_openings":1415,"open_vals":{"win":867,"draw":272,"loss":276},"games_per_pair":2830,"score":[[0.0,0.7721,0.7954,0.7919,0.8525,0.7898,0.8106,0.809,0.8405],[0.2279,0.0,0.5567,0.5572,0.7067,0.5829,0.6362,0.6345,0.6866],[0.2046,0.4433,0.0,0.4935,0.6664,0.5541,0.5906,0.5668,0.6468],[0.2081,0.4428,0.5065,0.0,0.6733,0.5201,0.579,0.5613,0.6394],[0.1475,0.2933,0.3336,0.3267,0.0,0.3228,0.4055,0.3772,0.4742],[0.2102,0.4171,0.4459,0.4799,0.6772,0.0,0.5624,0.5357,0.632],[0.1894,0.3638,0.4094,0.421,0.5945,0.4376,0.0,0.4786,0.556],[0.191,0.3655,0.4332,0.4387,0.6228,0.4643,0.5214,0.0,0.5723],[0.1595,0.3134,0.3532,0.3606,0.5258,0.368,0.444,0.4277,0.0]],"count":[[0,2830,2830,2830,2830,2830,2830,2830,2830],[2830,0,2830,2830,2830,2830,2830,2830,2830],[2830,2830,0,2830,2830,2830,2830,2830,2830],[2830,2830,2830,0,2830,2830,2830,2830,2830],[2830,2830,2830,2830,0,2830,2830,2830,2830],[2830,2830,2830,2830,2830,0,2830,2830,2830],[2830,2830,2830,2830,2830,2830,0,2830,2830],[2830,2830,2830,2830,2830,2830,2830,0,2830],[2830,2830,2830,2830,2830,2830,2830,2830,0]],"wins":[[0,2004,2091,2094,2314,2074,2157,2140,2248],[464,0,1405,1370,1839,1461,1627,1607,1773],[419,1084,0,1173,1672,1366,1478,1398,1632],[442,1046,1210,0,1714,1250,1422,1362,1570],[319,669,730,733,0,736,931,849,1111],[434,992,1060,1136,1739,0,1407,1300,1625],[399,856,965,975,1466,1054,0,1154,1365],[391,846,1020,1015,1544,1098,1275,0,1388],[321,717,801,781,1257,878,1048,979,0]],"draws":[[0,362,320,294,197,322,274,299,261],[362,0,341,414,322,377,347,377,340],[320,341,0,447,428,404,387,412,397],[294,414,447,0,383,444,433,453,479],[197,322,428,383,0,355,433,437,462],[322,377,404,444,355,0,369,432,327],[274,347,387,433,433,369,0,401,417],[299,377,412,453,437,432,401,0,463],[261,340,397,479,462,327,417,463,0]],"elo":[1725.6,1546.2,1511.1,1508.2,1386.6,1494.2,1452.3,1465.4,1410.3],"elo_lo":[1717.4,1542.0,1506.6,1504.1,1380.4,1490.2,1447.8,1460.3,1405.3],"elo_hi":[1734.6,1550.9,1515.1,1513.0,1391.8,1498.5,1456.5,1469.4,1415.3],"overall":[0.8077,0.5736,0.5208,0.5163,0.3351,0.4951,0.4313,0.4511,0.369],"depth_score":{"perfect":{"0":[1.0,16],"1":[0.8661,112],"2":[0.9177,784],"3":[0.8205,3808],"4":[0.7996,17920]},"D0":{"0":[0.6562,16],"1":[0.683,112],"2":[0.602,784],"3":[0.5708,3808],"4":[0.5722,17920]},"D1":{"0":[0.1875,16],"1":[0.5045,112],"2":[0.5057,784],"3":[0.5159,3808],"4":[0.5229,17920]},"C":{"0":[0.5938,16],"1":[0.4509,112],"2":[0.5083,784],"3":[0.5219,3808],"4":[0.5158,17920]},"A":{"0":[0.25,16],"1":[0.3125,112],"2":[0.3029,784],"3":[0.328,3808],"4":[0.3382,17920]},"k24":{"0":[0.375,16],"1":[0.4107,112],"2":[0.4834,784],"3":[0.4923,3808],"4":[0.4968,17920]},"k8":{"0":[0.4062,16],"1":[0.4196,112],"2":[0.3992,784],"3":[0.4153,3808],"4":[0.4362,17920]},"k4":{"0":[0.5625,16],"1":[0.4286,112],"2":[0.4184,784],"3":[0.4552,3808],"4":[0.4518,17920]},"k1":{"0":[0.4688,16],"1":[0.4241,112],"2":[0.3622,784],"3":[0.3801,3808],"4":[0.3665,17920]}},"depth_n":{"0":1,"1":7,"2":49,"3":238,"4":1120},"vs_perfect":{"D0":{"win":[464,177,502,1143],"draw":[0,185,359,544],"loss":[0,0,1143,1143]},"D1":{"win":[419,177,547,1143],"draw":[0,143,401,544],"loss":[0,0,1143,1143]},"C":{"win":[442,160,541,1143],"draw":[0,134,410,544],"loss":[0,0,1143,1143]},"A":{"win":[319,117,707,1143],"draw":[0,80,464,544],"loss":[0,0,1143,1143]},"k24":{"win":[434,161,548,1143],"draw":[0,161,383,544],"loss":[0,0,1143,1143]},"k8":{"win":[399,159,585,1143],"draw":[0,115,429,544],"loss":[0,0,1143,1143]},"k4":{"win":[391,164,588,1143],"draw":[0,135,409,544],"loss":[0,0,1143,1143]},"k1":{"win":[321,161,661,1143],"draw":[0,100,444,544],"loss":[0,0,1143,1143]}},"steps":{"D0":{"mean":9.716,"hist":[0.0,0.0,0.0,0.0,0.0,0.0005,0.0155,0.1549,0.2959,0.2806,0.1673,0.0611,0.018,0.0047,0.0011,0.0003,0.0001,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"by_ply":{"1":[8.0,64],"2":[7.537,456],"3":[8.092,2360],"4":[8.169,11320],"5":[8.437,11320],"6":[8.585,11320],"7":[8.733,10696],"8":[8.856,10693],"9":[9.03,10695],"10":[9.214,10693],"11":[9.261,10694],"12":[9.514,10689],"13":[9.414,10693],"14":[9.696,10661],"15":[9.553,10678],"16":[9.885,10639],"17":[9.716,10655],"18":[10.067,10599],"19":[9.871,10626],"20":[10.243,10553],"21":[10.06,10573],"22":[10.399,10499],"23":[10.281,10531],"24":[10.479,10385],"25":[10.409,10470],"26":[10.432,10272],"27":[10.381,10360],"28":[10.421,10131],"29":[10.335,10206],"30":[10.323,9898],"31":[10.245,9882],"32":[10.204,9339],"33":[10.055,9044],"34":[9.869,8406],"35":[9.957,7364],"36":[9.811,6803],"37":[9.943,5799],"38":[9.477,4858],"39":[9.524,3663],"40":[9.714,2336],"41":[9.633,1799]},"by_opp":{"D1":9.65,"C":9.706,"A":9.757,"k24":9.69,"k8":9.695,"k4":9.71,"k1":9.752,"perfect":9.767}},"D1":{"mean":9.217,"hist":[0.0,0.0,0.0,0.0,0.0,0.0017,0.0358,0.2123,0.3851,0.2535,0.0873,0.0194,0.0038,0.0008,0.0002,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"by_ply":{"1":[7.0,64],"2":[7.522,456],"3":[7.808,2360],"4":[8.102,11320],"5":[8.072,11320],"6":[8.485,11320],"7":[8.37,10696],"8":[8.685,10693],"9":[8.578,10694],"10":[8.789,10683],"11":[8.739,10689],"12":[8.996,10681],"13":[8.921,10685],"14":[9.154,10641],"15":[9.075,10668],"16":[9.293,10612],"17":[9.254,10637],"18":[9.446,10564],"19":[9.388,10597],"20":[9.555,10515],"21":[9.523,10549],"22":[9.617,10407],"23":[9.585,10495],"24":[9.623,10291],"25":[9.606,10424],"26":[9.685,10165],"27":[9.628,10336],"28":[9.888,9989],"29":[9.636,10155],"30":[9.903,9710],"31":[9.564,9790],"32":[9.8,9158],"33":[9.284,9116],"34":[9.502,8318],"35":[9.185,7443],"36":[9.576,6665],"37":[9.362,5874],"38":[9.516,4802],"39":[9.602,3811],"40":[10.313,2407],"41":[10.186,1955]},"by_opp":{"D0":9.199,"C":9.209,"A":9.224,"k24":9.206,"k8":9.184,"k4":9.182,"k1":9.208,"perfect":9.331}},"C":{"mean":7.053,"hist":[0.0,0.0,0.0,0.0,0.0091,0.1735,0.5803,0.2298,0.0073,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"by_ply":{"1":[6.0,64],"2":[5.965,456],"3":[6.008,2360],"4":[6.179,11320],"5":[6.331,11320],"6":[6.663,11320],"7":[6.714,10696],"8":[6.904,10685],"9":[6.897,10696],"10":[7.009,10685],"11":[7.011,10695],"12":[7.155,10682],"13":[7.117,10683],"14":[7.258,10665],"15":[7.211,10647],"16":[7.35,10647],"17":[7.292,10633],"18":[7.417,10615],"19":[7.322,10608],"20":[7.456,10561],"21":[7.333,10528],"22":[7.471,10473],"23":[7.328,10451],"24":[7.447,10377],"25":[7.315,10367],"26":[7.409,10259],"27":[7.283,10262],"28":[7.352,10117],"29":[7.231,10134],"30":[7.242,9885],"31":[7.151,9753],"32":[7.147,9289],"33":[7.032,9023],"34":[6.923,8372],"35":[6.838,7378],"36":[6.642,6603],"37":[6.646,5813],"38":[6.228,4686],"39":[6.063,3679],"40":[5.888,2402],"41":[5.884,1976]},"by_opp":{"D1":7.042,"k24":7.041,"D0":7.05,"k8":7.033,"k4":7.04,"k1":7.049,"perfect":7.128,"A":7.041}},"A":{"mean":4.63,"hist":[0.0,0.0,0.0021,0.3692,0.625,0.0037,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"by_ply":{"1":[3.0,64],"2":[3.787,456],"3":[3.862,2360],"4":[3.997,11320],"5":[3.998,11320],"6":[4.024,11320],"7":[4.053,10672],"8":[4.1,10696],"9":[4.267,10661],"10":[4.295,10696],"11":[4.492,10650],"12":[4.467,10695],"13":[4.63,10620],"14":[4.591,10691],"15":[4.704,10592],"16":[4.699,10674],"17":[4.769,10543],"18":[4.789,10614],"19":[4.827,10459],"20":[4.848,10552],"21":[4.87,10324],"22":[4.897,10431],"23":[4.904,10144],"24":[4.925,10339],"25":[4.928,9868],"26":[4.951,10237],"27":[4.944,9556],"28":[4.957,10085],"29":[4.954,9226],"30":[4.962,9846],"31":[4.938,8535],"32":[4.948,9143],"33":[4.919,7661],"34":[4.915,8281],"35":[4.838,5990],"36":[4.776,6415],"37":[4.586,4796],"38":[4.417,4555],"39":[4.224,2986],"40":[4.08,2132],"41":[4.002,1776]},"by_opp":{"k1":4.623,"D1":4.623,"perfect":4.676,"D0":4.626,"k24":4.626,"k8":4.624,"C":4.625,"k4":4.622}}},"length":{"perfect":34.59,"D0":35.36,"D1":35.33,"C":35.35,"A":34.65,"k24":35.31,"k8":35.19,"k4":35.27,"k1":34.87},"first_mover":{"first":0.5915}};
+const NAME = {perfect:"Perfect solver",D0:"Adaptive D · s0",D1:"Adaptive D · s1",C:"Adaptive C",A:"Adaptive A",k24:"Fixed 24",k8:"Fixed 8",k4:"Fixed 4",k1:"Fixed 1"};
+const COL = {perfect:"var(--fg2)",D0:"var(--s-D0)",D1:"var(--s-D1)",C:"var(--s-C)",A:"var(--s-A)",k24:"var(--s-k24)",k8:"var(--s-k8)",k4:"var(--s-k4)",k1:"var(--s-k1)"};
+const pct=(x,d=1)=>(100*x).toFixed(d)+"%";
+const P=D.players, I=Object.fromEntries(P.map((p,i)=>[p,i]));
+const NS="http://www.w3.org/2000/svg";
+function el(tag,attrs={},parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+/* generic line chart. series: {key,label,color,dash,pts:[[x,y,extra]],marks:[{x,y,shape,label}]} */
+function lineChart(host,{series,xMin,xMax,xTicks,xLabel,yMin,yMax,yTicks,yLabel,mode="x",H=320,xFmt=v=>v,tipTitle,yFmt,tipFmt}){
+  host.innerHTML="";
+  const W=760,m={l:48,r:16,t:12,b:40};
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":yLabel+" against "+xLabel},host);
+  const X=v=>m.l+(v-xMin)/(xMax-xMin)*(W-m.l-m.r), Y=v=>m.t+(1-(v-yMin)/(yMax-yMin))*(H-m.t-m.b);
+  const id="clip"+Math.random().toString(36).slice(2);
+  el("rect",{x:m.l,y:m.t-2,width:W-m.l-m.r,height:H-m.t-m.b+4},el("clipPath",{id},el("defs",{},svg)));
+  for(const t of yTicks){el("line",{x1:m.l,x2:W-m.r,y1:Y(t),y2:Y(t),stroke:"var(--grid)","stroke-width":1},svg);
+    const tx=el("text",{x:m.l-8,y:Y(t)+4,"text-anchor":"end"},svg);tx.textContent=(yFmt||(v=>pct(v,0)))(t);}
+  for(const t of xTicks){const tx=el("text",{x:X(t),y:H-m.b+16,"text-anchor":"middle"},svg);tx.textContent=xFmt(t);}
+  el("line",{x1:m.l,x2:W-m.r,y1:H-m.b,y2:H-m.b,stroke:"var(--rule)"},svg);
+  const xl=el("text",{x:(m.l+W-m.r)/2,y:H-6,"text-anchor":"middle",class:"axis-label"},svg);xl.textContent=xLabel;
+  const g=el("g",{"clip-path":`url(#${id})`},svg);
+  for(const s of series){
+    if(s.pts.length>1) el("polyline",{points:s.pts.map(p=>X(p[0])+","+Y(p[1])).join(" "),fill:"none",stroke:s.color,"stroke-width":2,"stroke-linejoin":"round","stroke-dasharray":s.dash?"5 4":"none",opacity:s.faint?0.55:1},g);
+  }
+  for(const s of series) for(const mk of (s.marks||[])){
+    if(mk.shape==="sq") el("rect",{x:X(mk.x)-5,y:Y(mk.y)-5,width:10,height:10,rx:2,fill:s.color,stroke:"var(--surface)","stroke-width":2},g);
+    else el("circle",{cx:X(mk.x),cy:Y(mk.y),r:mk.r||5.5,fill:mk.hollow?"var(--surface)":s.color,stroke:mk.hollow?s.color:"var(--surface)","stroke-width":2},g);
+  }
+  // hover
+  const cross=el("line",{y1:m.t,y2:H-m.b,stroke:"var(--muted)","stroke-dasharray":"3 3",opacity:0},svg);
+  const dot=el("circle",{r:6,fill:"none","stroke-width":2,opacity:0},svg);
+  const tip=document.createElement("div");tip.className="tip";tip.hidden=true;host.appendChild(tip);
+  const hit=el("rect",{x:m.l,y:m.t,width:W-m.l-m.r,height:H-m.t-m.b,fill:"transparent"},svg);
+  function place(px,py){const r=host.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
+    let left=px+14;if(left+tw>r.width)left=px-tw-14;if(left<0)left=0;let top=py-th/2;top=Math.max(0,Math.min(top,r.height-th));tip.style.left=left+"px";tip.style.top=top+"px";}
+  function move(ev){
+    const r=svg.getBoundingClientRect(),sx=(ev.clientX-r.left)*W/r.width,sy=(ev.clientY-r.top)*H/r.height;
+    const px=ev.clientX-host.getBoundingClientRect().left,py=ev.clientY-host.getBoundingClientRect().top;
+    if(mode==="x"){
+      const xv=Math.round(xMin+(sx-m.l)/(W-m.l-m.r)*(xMax-xMin));if(xv<xMin||xv>xMax)return;
+      cross.setAttribute("x1",X(xv));cross.setAttribute("x2",X(xv));cross.setAttribute("opacity",.7);
+      const rows=series.map(s=>{const p=s.pts.find(p=>p[0]===xv);return p?{s,y:p[1]}:null}).filter(Boolean).sort((a,b)=>b.y-a.y);
+      tip.innerHTML=`<b>${tipTitle?tipTitle(xv):"Step "+xv}</b>`+rows.map(o=>`<div class="row"><span><i class="sw" style="background:${o.s.color}"></i>${o.s.label}</span><span>${(tipFmt||pct)(o.y)}</span></div>`).join("");
+    }else{
+      let best=null;for(const s of series)for(const p of s.pts.concat((s.marks||[]).map(mk=>[mk.x,mk.y,mk]))){const d=Math.hypot(X(p[0])-sx,Y(p[1])-sy);if(!best||d<best.d)best={d,s,p};}
+      if(!best||best.d>40){leave();return;}
+      dot.setAttribute("cx",X(best.p[0]));dot.setAttribute("cy",Y(best.p[1]));dot.setAttribute("stroke",best.s.color);dot.setAttribute("opacity",1);
+      tip.innerHTML=`<b>${best.s.label}</b>`+(best.p[2]&&best.p[2].t!==undefined?`<div class="row"><span>Stop threshold</span><span>${best.p[2].t}</span></div>`:"")+
+        `<div class="row"><span>Mean steps</span><span>${best.p[0].toFixed(2)}</span></div><div class="row"><span>Accuracy</span><span>${pct(best.p[1])}</span></div>`;
+    }
+    tip.hidden=false;place(px,py);
+  }
+  function leave(){tip.hidden=true;cross.setAttribute("opacity",0);dot.setAttribute("opacity",0);}
+  hit.addEventListener("pointermove",move);hit.addEventListener("pointerleave",leave);
+  return svg;
+}
+function legend(host,items){host.innerHTML=items.map(i=>`<span><i class="${i.dash?"dash":""}" style="border-color:${i.color}"></i>${i.label}</span>`).join("");}
+
+function tipFor(host){const t=document.createElement("div");t.className="tip";t.hidden=true;host.appendChild(t);
+  return {show(html,ev){t.innerHTML=html;t.hidden=false;const r=host.getBoundingClientRect();let x=ev.clientX-r.left+14,y=ev.clientY-r.top-10;if(x+t.offsetWidth>r.width)x=ev.clientX-r.left-t.offsetWidth-14;t.style.left=Math.max(0,x)+"px";t.style.top=Math.max(0,y)+"px";},hide(){t.hidden=true;}};}
+
+// ---- findings
+const order=P.map((p,i)=>i).sort((a,b)=>D.elo[b]-D.elo[a]);
+const sc=(a,b)=>D.score[I[a]][I[b]];
+const vp=p=>D.vs_perfect[p];
+const conv=p=>{const r=vp(p).win;return (r[0]+0.5*r[1])/r[3];};
+const hold=p=>{const r=vp(p).draw;return r[1]/r[3];};
+document.getElementById("findings").innerHTML=[
+  ["yes","Adaptive D seed 0 is the strongest model",`Rated ${D.elo[I.D0].toFixed(0)}, ahead of every other model with non-overlapping intervals. It won all seven of its pairings against other models: ${pct(sc("D0","D1"))} against its own second seed, ${pct(sc("D0","k24"))} against Fixed 24 and ${pct(sc("D0","k8"))} against Fixed 8.`],
+  ["","Seed 1 ties Adaptive C",`Adaptive D seed 1 (${D.elo[I.D1].toFixed(0)}) and C (${D.elo[I.C].toFixed(0)}) are within each other's intervals and split their pairing ${pct(sc("D1","C"))}–${pct(sc("C","D1"))}. Both are ahead of every fixed control.`],
+  ["yes","Adaptive beats fixed at equal compute",`At about the same steps per move, both D seeds beat Fixed 8 (${pct(sc("D0","k8"))} and ${pct(sc("D1","k8"))}), and C beats it ${pct(sc("C","k8"))}. Fixed 24 is the best control, but loses to all three while using 2.5–3.4 times as many steps.`],
+  ["","More fixed steps do not help monotonically",`Fixed 4 beats Fixed 8 (${pct(sc("k4","k8"))}), matching the position tests. Adaptive A, which learned to stop after about 5 steps, is the weakest model and scores ${pct(sc("A","k1"))} against the 1-step control.`],
+  ["","No model is close to perfect",`Against the solver the best model, D seed 0, keeps ${pct(conv("D0"))} of the value of won openings and holds ${pct(hold("D0"))} of drawn ones. The solver scores ${pct(D.overall[I.perfect])} overall.`],
+  ["","Adaptive models think longer in the middle game",`During play, D seed 0 averages ${D.steps.D0.mean.toFixed(1)} steps per move: about ${D.steps.D0.by_ply["7"][0].toFixed(1)} early, rising to ${Math.max(...Object.values(D.steps.D0.by_ply).map(v=>v[0])).toFixed(1)} around move 25, then falling slightly. Step counts barely depend on the opponent.`],
+].map(([c,t,s])=>`<li><span class="tag ${c}">${t}</span><span>${s}</span></li>`).join("");
+
+// ---- Elo dot-whisker
+(function(){const host=document.getElementById("elo");const W=760,rowH=30,m={l:130,r:70,t:10,b:34},H=m.t+m.b+rowH*P.length;
+  const lo=Math.floor((Math.min(...D.elo_lo)-20)/50)*50,hi=Math.ceil((Math.max(...D.elo_hi)+20)/50)*50;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"Rating with 95% interval for each player"},host);
+  const X=v=>m.l+(v-lo)/(hi-lo)*(W-m.l-m.r);
+  for(let t=lo;t<=hi;t+=50){el("line",{x1:X(t),x2:X(t),y1:m.t,y2:H-m.b,stroke:t===1500?"var(--rule)":"var(--grid)"},svg);const tx=el("text",{x:X(t),y:H-m.b+16,"text-anchor":"middle"},svg);tx.textContent=t;}
+  const xl=el("text",{x:(m.l+W-m.r)/2,y:H-4,"text-anchor":"middle",class:"axis-label"},svg);xl.textContent="Rating (Elo scale, mean 1500)";
+  const tip=tipFor(host);
+  order.forEach((i,r)=>{const p=P[i],y=m.t+rowH*r+rowH/2;
+    const lab=el("text",{x:m.l-10,y:y+4,"text-anchor":"end"},svg);lab.textContent=NAME[p];
+    el("line",{x1:X(D.elo_lo[i]),x2:X(D.elo_hi[i]),y1:y,y2:y,stroke:COL[p],"stroke-width":2},svg);
+    el("circle",{cx:X(D.elo[i]),cy:y,r:6,fill:COL[p],stroke:"var(--surface)","stroke-width":2},svg);
+    const v=el("text",{x:X(D.elo_hi[i])+8,y:y+4},svg);v.textContent=D.elo[i].toFixed(0);v.setAttribute("class","num");
+    const hit=el("rect",{x:0,y:y-rowH/2,width:W,height:rowH,fill:"transparent"},svg);
+    hit.addEventListener("pointermove",ev=>tip.show(`<b>${NAME[p]}</b><div class="row"><span>Rating</span><span>${D.elo[i].toFixed(0)}</span></div><div class="row"><span>95% interval</span><span>${D.elo_lo[i].toFixed(0)}–${D.elo_hi[i].toFixed(0)}</span></div><div class="row"><span>Score</span><span>${pct(D.overall[i])}</span></div>`,ev));
+    hit.addEventListener("pointerleave",()=>tip.hide());});
+  document.getElementById("capElo").textContent=`A 100-point gap means the stronger player is expected to score about 64%. The perfect solver sits ${(D.elo[I.perfect]-D.elo[I.D0]).toFixed(0)} points above the best model.`;
+})();
+
+// ---- matrix
+(function(){const host=document.getElementById("mx");
+  const ramp=["--d-4","--d-3","--d-2","--d-1","--d0","--d1","--d2","--d3","--d4"];
+  document.getElementById("divRamp").innerHTML=ramp.map(s=>`<i style="background:var(${s})"></i>`).join("");
+  const shade=v=>{const k=Math.max(-4,Math.min(4,Math.round((v-0.5)/0.075)));return `var(--d${k<0?k:k})`};
+  const ink=v=>Math.abs(v-0.5)>=0.26?"var(--on-strong)":"var(--fg)";
+  let h=`<div class="mr"><span></span>${order.map(j=>`<span class="mh">${NAME[P[j]].replace("Adaptive ","").replace("Fixed ","Fixed ").replace("Perfect solver","Perfect")}</span>`).join("")}</div>`;
+  for(const i of order){h+=`<div class="mr"><span class="ml"><span class="swatch" style="background:${COL[P[i]]}"></span>${NAME[P[i]]}</span>`;
+    for(const j of order){if(i===j){h+=`<span class="mc self">–</span>`;continue;}
+      const v=D.score[i][j];h+=`<span class="mc" tabindex="0" data-i="${i}" data-j="${j}" style="background:${shade(v)};color:${ink(v)}">${(100*v).toFixed(0)}</span>`;}
+    h+="</div>";}
+  host.innerHTML=h;
+  const tip=tipFor(host.parentElement.parentElement);
+  host.addEventListener("pointermove",ev=>{const c=ev.target.closest(".mc[data-i]");if(!c){tip.hide();return;}const i=+c.dataset.i,j=+c.dataset.j,w=D.wins[i][j],d=D.draws[i][j],n=D.count[i][j];
+    tip.show(`<b>${NAME[P[i]]} vs ${NAME[P[j]]}</b><div class="row"><span>Score</span><span>${pct(D.score[i][j])}</span></div><div class="row"><span>Wins</span><span>${w}</span></div><div class="row"><span>Draws</span><span>${d}</span></div><div class="row"><span>Losses</span><span>${n-w-d}</span></div>`,ev);});
+  host.addEventListener("pointerleave",()=>tip.hide());
+  document.getElementById("capMx").textContent=`Rows and columns are in rating order. Above the diagonal is almost all blue: in ${(()=>{let c=0,t=0;for(let a=0;a<order.length;a++)for(let b=a+1;b<order.length;b++){t++;if(D.score[order[a]][order[b]]>0.5)c++;}return c+" of "+t;})()} pairings the higher-rated player won the head-to-head.`;
+})();
+
+// ---- vs perfect stacked bars
+(function(){const models=["D0","D1","C","k24","k4","k8","k1","A"];
+  const segs=[["Model wins","var(--res-w)"],["Draw","var(--res-d)"],["Model loses","var(--res-l)"]];
+  document.getElementById("lgPerf").innerHTML=segs.map(([l,c])=>`<span><i style="border-top:10px solid ${c};width:12px"></i>${l}</span>`).join("");
+  document.getElementById("nWin").textContent=vp("D0").win[3].toLocaleString();
+  document.getElementById("nDraw").textContent=vp("D0").draw[3].toLocaleString();
+  function bars(hostId,kind){const host=document.getElementById(hostId);const W=380,rowH=26,m={l:110,r:12,t:4,b:22},H=m.t+m.b+rowH*models.length;
+    const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"Results against the solver"},host);const X=v=>m.l+v*(W-m.l-m.r);const tip=tipFor(host);
+    for(const t of [0,.25,.5,.75,1]){const tx=el("text",{x:X(t),y:H-6,"text-anchor":"middle"},svg);tx.textContent=pct(t,0);}
+    const ms=[...models].sort((a,b)=>{const ra=vp(a)[kind],rb=vp(b)[kind];return (rb[0]+.5*rb[1])/rb[3]-(ra[0]+.5*ra[1])/ra[3];});
+    ms.forEach((p,r)=>{const row=vp(p)[kind],n=row[3],y=m.t+r*rowH+4,h=rowH-8;let x0=0;
+      const lab=el("text",{x:m.l-8,y:y+h/2+4,"text-anchor":"end"},svg);lab.textContent=NAME[p];
+      [0,1,2].forEach(k=>{const f=row[k]/n;if(f<=0)return;el("rect",{x:X(x0)+(x0>0?1:0),y,width:Math.max(0,X(x0+f)-X(x0)-(x0>0?1:0)),height:h,rx:x0===0||x0+f>=0.999?3:0,fill:segs[k][1]},svg);x0+=f;});
+      const hit=el("rect",{x:0,y:y-4,width:W,height:rowH,fill:"transparent"},svg);
+      hit.addEventListener("pointermove",ev=>tip.show(`<b>${NAME[p]}</b>`+segs.map(([l],k)=>`<div class="row"><span>${l}</span><span>${row[k]} · ${pct(row[k]/n)}</span></div>`).join(""),ev));
+      hit.addEventListener("pointerleave",()=>tip.hide());});}
+  bars("perfWin","win");bars("perfDraw","draw");
+  document.getElementById("capPerf").textContent=`From winning openings, D seed 0 wins ${pct(vp("D0").win[0]/vp("D0").win[3])} and draws ${pct(vp("D0").win[1]/vp("D0").win[3])}; Adaptive A wins ${pct(vp("A").win[0]/vp("A").win[3])}. From drawn openings, D seed 0 holds the draw ${pct(hold("D0"))} of the time against ${pct(hold("k24"))} for Fixed 24 and ${pct(hold("A"))} for A.`;
+})();
+
+// ---- steps per move
+(function(){const ms=["D0","D1","C","A"];
+  const series=ms.map(p=>({key:p,label:NAME[p],color:COL[p],pts:Object.entries(D.steps[p].by_ply).map(([k,v])=>[+k,v[0]]).filter(q=>q[0]>=4&&q[0]<=40)}));
+  legend(document.getElementById("lgSteps"),series.map(s=>({label:`${s.label} · mean ${D.steps[s.key].mean.toFixed(1)}`,color:s.color})));
+  lineChart(document.getElementById("steps"),{series,xMin:4,xMax:40,xTicks:[4,10,16,22,28,34,40],xLabel:"Pieces on the board before the move",yMin:3,yMax:12,yTicks:[3,6,9,12],yLabel:"Outer steps",mode:"x",yFmt:v=>v,tipFmt:v=>v.toFixed(2)+" steps",tipTitle:x=>x+" pieces on the board"});
+  const b=D.steps.D0.by_ply;
+  document.getElementById("capSteps").textContent=`Only moves made at least 50 times are shown. Adaptive D seed 0 uses ${b["7"][0].toFixed(1)} steps with 7 pieces down, ${b["25"][0].toFixed(1)} with 25, and ${b["37"][0].toFixed(1)} with 37. The ordering D > C > A matches each model's training, and none of them changes its effort much by opponent: D seed 0 averages ${Math.min(...Object.values(D.steps.D0.by_opp)).toFixed(2)}–${Math.max(...Object.values(D.steps.D0.by_opp)).toFixed(2)} steps across its eight opponents.`;
+})();
+
+// ---- depth table
+(function(){const ds=[0,1,2,3,4];let h=`<thead><tr><th>Player</th>${ds.map(d=>`<th>${d} plies<br><span class="ci">${D.depth_n[d]} opening${D.depth_n[d]>1?"s":""}</span></th>`).join("")}</tr></thead><tbody>`;
+  for(const i of order){const p=P[i];h+=`<tr><td><span class="swatch" style="background:${COL[p]}"></span>${NAME[p]}</td>`+ds.map(d=>{const [v,n]=D.depth_score[p][d];return `<td class="num">${pct(v)} <span class="ci">${n.toLocaleString()}</span></td>`}).join("")+"</tr>";}
+  document.getElementById("depthTbl").innerHTML=h+"</tbody>";})();
+
+// ---- standings
+(function(){let h=`<thead><tr><th>#</th><th>Player</th><th>Rating</th><th>95% interval</th><th>Score</th><th>Mean game length</th><th>Mean outer steps</th></tr></thead><tbody>`;
+  const fixedSteps={k24:24,k8:8,k4:4,k1:1};
+  order.forEach((i,r)=>{const p=P[i];h+=`<tr><td class="num">${r+1}</td><td><span class="swatch" style="background:${COL[p]}"></span>${NAME[p]}</td><td class="num">${D.elo[i].toFixed(0)}</td><td class="num">${D.elo_lo[i].toFixed(0)}–${D.elo_hi[i].toFixed(0)}</td><td class="num">${pct(D.overall[i])}</td><td class="num">${D.length[p].toFixed(1)} plies</td><td class="num">${D.steps[p]?D.steps[p].mean.toFixed(1):fixedSteps[p]??"–"}</td></tr>`;});
+  document.getElementById("stand").innerHTML=h+"</tbody>";})();
+const ov=D.open_vals;document.getElementById("ov").textContent=`${ov.win} are wins, ${ov.draw} draws and ${ov.loss} losses`;
+</script>

@@ -1,0 +1,162 @@
+{
+  "ckpt": "runs/c4p-fixed-k4/ckpt.pt",
+  "step": 22000,
+  "n": 12991,
+  "acc_at_stop": 0.8547,
+  "acc_by_step": [
+    0.5262,
+    0.734,
+    0.8297,
+    0.8547
+  ],
+  "mean_stop": 4.0,
+  "mean_exp_steps": 4.0,
+  "col_acc_by_step": [
+    0.2843,
+    0.4927,
+    0.6785,
+    0.7291
+  ],
+  "by_r": {
+    "1-1": {
+      "n": 1491,
+      "acc_at_stop": 0.9993,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.66,
+        0.9001,
+        0.9879,
+        0.9993
+      ]
+    },
+    "2-2": {
+      "n": 1500,
+      "acc_at_stop": 0.9993,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.8127,
+        0.934,
+        0.992,
+        0.9993
+      ]
+    },
+    "3-4": {
+      "n": 1500,
+      "acc_at_stop": 0.972,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.494,
+        0.8407,
+        0.942,
+        0.972
+      ]
+    },
+    "5-6": {
+      "n": 1500,
+      "acc_at_stop": 0.8527,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.4787,
+        0.712,
+        0.82,
+        0.8527
+      ]
+    },
+    "7-8": {
+      "n": 1500,
+      "acc_at_stop": 0.838,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.476,
+        0.6867,
+        0.7927,
+        0.838
+      ]
+    },
+    "9-10": {
+      "n": 1500,
+      "acc_at_stop": 0.796,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.4533,
+        0.634,
+        0.762,
+        0.796
+      ]
+    },
+    "11-12": {
+      "n": 1500,
+      "acc_at_stop": 0.7667,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.4473,
+        0.6547,
+        0.7573,
+        0.7667
+      ]
+    },
+    "13-16": {
+      "n": 1500,
+      "acc_at_stop": 0.726,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.4433,
+        0.616,
+        0.6927,
+        0.726
+      ]
+    },
+    "17-42": {
+      "n": 1000,
+      "acc_at_stop": 0.687,
+      "mean_stop": 4.0,
+      "mean_exp_steps": 4.0,
+      "acc_by_step": [
+        0.444,
+        0.577,
+        0.668,
+        0.687
+      ]
+    }
+  },
+  "spearman_stop_vs_r_by_stage": {
+    "6-16": {
+      "n": 4491,
+      "rho_exp_steps": NaN,
+      "rho_stop": NaN,
+      "ci95": [
+        NaN,
+        NaN
+      ],
+      "rho_shuffled_r": NaN
+    },
+    "17-26": {
+      "n": 4500,
+      "rho_exp_steps": NaN,
+      "rho_stop": NaN,
+      "ci95": [
+        NaN,
+        NaN
+      ],
+      "rho_shuffled_r": NaN
+    },
+    "27-36": {
+      "n": 4000,
+      "rho_exp_steps": NaN,
+      "rho_stop": NaN,
+      "ci95": [
+        NaN,
+        NaN
+      ],
+      "rho_shuffled_r": NaN
+    }
+  }
+}

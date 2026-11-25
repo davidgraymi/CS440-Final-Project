@@ -1,0 +1,57 @@
+{
+  "winner": "none",
+  "pilots": {
+    "c4p-pilot-D": {
+      "gain_deep": 0.054,
+      "kruskal_h": 43.49,
+      "kruskal_p": 7.097497404998675e-07,
+      "mean_stage_rho": -0.0407,
+      "acc_r1": 0.4581,
+      "acc_r2": 0.4893,
+      "mean_stop": 6.8,
+      "pass_1_deeper_gain": true,
+      "pass_2_stop_tracks_r": false,
+      "pass_3_learns_game": false,
+      "passes": false
+    },
+    "c4p-pilot-C": {
+      "gain_deep": 0.0411,
+      "kruskal_h": 353.77,
+      "kruskal_p": 1.4163006971999605e-71,
+      "mean_stage_rho": 0.1078,
+      "acc_r1": 0.4051,
+      "acc_r2": 0.514,
+      "mean_stop": 5.439,
+      "pass_1_deeper_gain": false,
+      "pass_2_stop_tracks_r": true,
+      "pass_3_learns_game": false,
+      "passes": false
+    },
+    "c4p-pilot-B": {
+      "gain_deep": 0.0181,
+      "kruskal_h": 101.86,
+      "kruskal_p": 1.780562896598293e-18,
+      "mean_stage_rho": 0.0639,
+      "acc_r1": 0.4507,
+      "acc_r2": 0.438,
+      "mean_stop": 4.007,
+      "pass_1_deeper_gain": false,
+      "pass_2_stop_tracks_r": false,
+      "pass_3_learns_game": false,
+      "passes": false
+    },
+    "c4p-pilot-A": {
+      "gain_deep": 0.0178,
+      "kruskal_h": 271.63,
+      "kruskal_p": 4.423877504871571e-54,
+      "mean_stage_rho": -0.0408,
+      "acc_r1": 0.391,
+      "acc_r2": 0.4907,
+      "mean_stop": 4.0,
+      "pass_1_deeper_gain": false,
+      "pass_2_stop_tracks_r": false,
+      "pass_3_learns_game": false,
+      "passes": false
+    }
+  }
+}

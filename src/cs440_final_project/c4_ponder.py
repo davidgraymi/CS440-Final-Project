@@ -481,6 +481,7 @@ def eval_main(argv=None):
     p.add_argument("--k-max", type=int, default=None, help="default: trained k_max")
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--bootstrap", type=int, default=1000)
+    p.add_argument("--limit", type=int, default=0, help="evaluate only the first N positions (dry runs)")
     p.add_argument("--device", default="auto")
     p.add_argument("--out", default=None)
     args = p.parse_args(argv)
@@ -490,6 +491,9 @@ def eval_main(argv=None):
     model.load_state_dict(ck["ema"])
     model.to(device)
     d = load(f"{args.data_prefix}_{args.split}.npz")
+    if args.limit:
+        d = {k: v[:args.limit] for k, v in d.items()}
+    Path(args.out or ".").parent.mkdir(parents=True, exist_ok=True)
     k_max = args.k_max or ck["cfg"]["n_sup"]
     fixed = ck.get("args", {}).get("fixed_steps", 0)
     res = run_eval(model, d, device, k_max, args.batch_size, fixed)

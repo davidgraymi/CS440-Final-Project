@@ -15,6 +15,9 @@
 # creates the token; copy that file to the MacBook once (AirDrop is fine) or
 # export RAY_AUTH_TOKEN=<its contents> before `join`.
 #
+# On macOS, Ray binds to 127.0.0.1 unless given an address: start the head with
+# NODE_IP=<its LAN address> (e.g. NODE_IP=192.168.0.253 scripts/ray_node.sh head).
+# The macOS firewall must allow incoming connections for gcs_server, raylet and python.
 # Overrides: SLOTS=1 RAY_PORT=6379 NUM_CPUS=2 OBJ_STORE_MB=300 NODE_IP=<auto>
 #   C4_GUARD_DNS (1 on head, 0 on join: whether jobs here also guard AdGuard DNS)
 set -euo pipefail
@@ -26,10 +29,11 @@ SLOTS=${SLOTS:-1}
 PORT=${RAY_PORT:-6379}
 
 export RAY_AUTH_MODE=token          # nobody without the token can run code on the cluster
+export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1  # Ray refuses multi-node clusters on macOS without this
 export RAY_USAGE_STATS_ENABLED=0
 export C4_REPO=$(pwd)               # job processes inherit this: where to run and write results
 
-common=(--num-cpus "${NUM_CPUS:-2}" --include-dashboard=false --disable-usage-stats
+common=(--num-cpus "${NUM_CPUS:-2}" --disable-usage-stats
         --object-store-memory $(( ${OBJ_STORE_MB:-300} * 1000000 )))
 [ -n "${NODE_IP:-}" ] && common+=(--node-ip-address "$NODE_IP")
 
@@ -45,7 +49,7 @@ case "${1:-}" in
   head)
     export C4_GUARD_DNS=${C4_GUARD_DNS:-1}
     [ -s "$HOME/.ray/auth_token" ] || "$RAY" get-auth-token --generate >/dev/null
-    nice -n 10 "$RAY" start --head --port "$PORT" "${common[@]}" \
+    nice -n 10 "$RAY" start --head --port "$PORT" --include-dashboard=false "${common[@]}" \
       --resources "{\"mps\": $SLOTS, \"c4_head\": 1}"
     echo
     echo "head up with $SLOTS job slot(s). On the MacBook: scripts/ray_node.sh join $(hostname -s).local"

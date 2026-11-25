@@ -30,6 +30,8 @@ c4-baselines = "cs440_final_project.c4data:baselines_main"
 c4-ponder = "cs440_final_project.c4_ponder:train_main"
 c4-ponder-eval = "cs440_final_project.c4_ponder:eval_main"
 c4-ponder-decide = "cs440_final_project.c4_ponder:decide_main"
+c4-outer-loop = "cs440_final_project.outer_loop:main"
+c4-tournament = "cs440_final_project.c4_tournament:main"
 
 [build-system]
 requires = ["uv_build>=0.13.9,<0.14.0"]
