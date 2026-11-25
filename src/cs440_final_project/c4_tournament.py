@@ -34,6 +34,12 @@ DEFAULT_PLAYERS = {
 CENTER_ORDER = [3, 2, 4, 1, 5, 0, 6]
 
 
+def ckpt_path(rel: str) -> str:
+    """runs/<run>/ckpt.pt if present (a local training run), else the committed copy in results/c4p/."""
+    p = Path(rel)
+    return rel if p.exists() else str(Path("results/c4p") / p.parent.name / p.name)
+
+
 class ModelPlayer:
     def __init__(self, ckpt: str, device, batch_size: int = 512):
         ck = torch.load(ckpt, map_location="cpu", weights_only=True)
@@ -162,7 +168,7 @@ def main(argv=None):
     (out / "openings.json").write_text(json.dumps(val))
     print(f"{len(opens)} openings up to {args.max_ply} plies; {len(names)} players", flush=True)
     used = {x for pr in list(itertools.combinations(names, 2))[args.shard::args.num_shards] for x in pr}
-    players = {n: PerfectPlayer() if n == "perfect" else ModelPlayer(DEFAULT_PLAYERS[n], device) for n in used}
+    players = {n: PerfectPlayer() if n == "perfect" else ModelPlayer(ckpt_path(DEFAULT_PLAYERS[n]), device) for n in used}
     done = set()
     gf = out / "games.jsonl"
     if gf.exists():  # resume: skip pairs already written
